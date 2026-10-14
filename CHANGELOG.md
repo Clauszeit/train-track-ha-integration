@@ -4,6 +4,8 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+- Fix the options flow crashing when Home Assistant loads its configuration form.
+
 ## 0.5.2-dev.1 (Development)
 
 - Fix Home Assistant entity cleanup to use the supported entity registry helper.

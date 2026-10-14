@@ -59,7 +59,9 @@ class _ConfigFlow:
 
 
 class _OptionsFlow(_ConfigFlow):
-    pass
+    @property
+    def config_entry(self):
+        return self._config_entry
 
 
 class _DataUpdateCoordinator:
@@ -397,7 +399,8 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_options_flow_saves_poll_interval(self):
         entry = types.SimpleNamespace(options={}, data={"scan_interval": 300})
-        flow = config_flow.TrainTrackOptionsFlow(entry)
+        flow = config_flow.TrainTrackConfigFlow.async_get_options_flow(entry)
+        flow._config_entry = entry
         form = await flow.async_step_init()
         self.assertEqual(form["step_id"], "init")
         result = await flow.async_step_init({"scan_interval": 900, "one_time_retention_days": 14})

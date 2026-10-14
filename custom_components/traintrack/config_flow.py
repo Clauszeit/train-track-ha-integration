@@ -211,14 +211,11 @@ class TrainTrackConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
         """Return the options flow for polling and trip retention."""
-        return TrainTrackOptionsFlow(config_entry)
+        return TrainTrackOptionsFlow()
 
 
 class TrainTrackOptionsFlow(config_entries.OptionsFlow):
     """Allow users to change polling and trip retention after setup."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Save the selected polling interval."""
