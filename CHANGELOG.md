@@ -4,6 +4,10 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.3.1-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Fix SonarQube findings and add functional coverage for the API client, config flow, polling coordinator, migrations, and sensors.
 
 ## 0.3.0-dev.1 (Development)
 

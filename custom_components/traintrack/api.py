@@ -52,19 +52,18 @@ class TrainTrackApi:
     async def _request(self, path: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         try:
-            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
-                async with self._session.get(
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS), self._session.get(
                     urljoin(self._base_url, path.lstrip("/")),
                     headers=headers,
                     allow_redirects=False,
                 ) as response:
-                    if response.status in (401, 403):
-                        raise TrainTrackAuthError("TrainTrack rejected the configured API key.")
-                    if response.status < 200 or response.status >= 300:
-                        raise TrainTrackConnectionError(
-                            f"TrainTrack returned HTTP {response.status}."
-                        )
-                    payload = await response.json(content_type=None)
+                if response.status in (401, 403):
+                    raise TrainTrackAuthError("TrainTrack rejected the configured API key.")
+                if response.status < 200 or response.status >= 300:
+                    raise TrainTrackConnectionError(
+                        f"TrainTrack returned HTTP {response.status}."
+                    )
+                payload = await response.json(content_type=None)
         except TrainTrackApiError:
             raise
         except (ClientError, TimeoutError, ValueError) as err:

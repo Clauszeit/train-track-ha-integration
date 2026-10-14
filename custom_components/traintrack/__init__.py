@@ -32,7 +32,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_migrate_entry(  # NOSONAR: required async HA hook; update_entry is synchronous.
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
     """Migrate configuration entries when needed."""
     if entry.version == 1:
         data = dict(entry.data)

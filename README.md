@@ -36,7 +36,7 @@ Until an explicit release is requested, HACS uses the default branch. Normal pus
 
 ## Validation
 
-Pull requests and pushes run the HACS repository validator and Home Assistant's `hassfest` validator. Pushes also run SonarQube analysis. The project key is stored in `sonar-project.properties`; configure only `SONAR_HOST_URL` and `SONAR_TOKEN` as GitHub repository secrets. Add focused tests alongside functional changes and run the repository's test command before committing.
+Run the integration tests locally with `python -m unittest discover -s tests -v`. Pull requests and pushes run the test suite, HACS repository validator, and Home Assistant's `hassfest` validator. Pushes also upload Python coverage to SonarQube and wait for its Quality Gate. The project key is stored in `sonar-project.properties`; configure only `SONAR_HOST_URL` and `SONAR_TOKEN` as GitHub repository secrets.
 
 ## Versioning and releases
 
