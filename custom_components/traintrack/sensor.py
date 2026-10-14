@@ -21,6 +21,8 @@ from .const import (
 )
 from .coordinator import TrainTrackCoordinator
 
+SENSOR_ENTITY_PREFIX = "sensor."
+
 SENSORS = (
     SensorEntityDescription(
         key="status",
@@ -174,28 +176,58 @@ def _refresh_registered_device_name(
 def _refresh_registered_entity_ids(
     hass: HomeAssistant, entry: Any, connection: dict[str, Any]
 ) -> None:
-    """Replace legacy route-only entity IDs with IDs containing the schedule."""
+    """Migrate legacy and repeatedly expanded route entity IDs."""
     origin = connection.get("origin") or "Unbekannter Start"
     destination = connection.get("destination") or "Unbekanntes Ziel"
-    legacy_prefix = f"sensor.{slugify(f'{origin} {destination}') }"
-    current_prefix = f"sensor.{slugify(_connection_name(connection))}"
+    legacy_prefix = f"{SENSOR_ENTITY_PREFIX}{slugify(f'{origin} {destination}') }"
+    current_prefix = f"{SENSOR_ENTITY_PREFIX}{slugify(_connection_name(connection))}"
     if legacy_prefix == current_prefix:
         return
 
     registry = er.async_get(hass)
     for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
-        if not entity.unique_id.startswith(f"{entry.unique_id}_{connection.get('id')}_"):
+        unique_id_prefix = f"{entry.unique_id}_{connection.get('id')}_"
+        if not entity.unique_id.startswith(unique_id_prefix):
             continue
-        if not entity.entity_id.startswith(f"{legacy_prefix}_") and entity.entity_id != legacy_prefix:
+        sensor_key = entity.unique_id[len(unique_id_prefix) :]
+        if sensor_key not in {description.key for description in SENSORS}:
             continue
-        suffix = entity.entity_id[len(legacy_prefix):]
+        target_entity_id = f"{current_prefix}_{sensor_key}"
+        entity_object_id = entity.entity_id.removeprefix(SENSOR_ENTITY_PREFIX)
+        target_object_id = target_entity_id.removeprefix(SENSOR_ENTITY_PREFIX)
+        legacy_object_id = legacy_prefix.removeprefix(SENSOR_ENTITY_PREFIX)
+        is_legacy_id = entity_object_id in {
+            legacy_object_id,
+            f"{legacy_object_id}_{sensor_key}",
+        }
+        is_repeated_current_id = _has_repeated_entity_prefix(
+            entity_object_id, target_object_id
+        )
+        if entity.entity_id == target_entity_id or not (
+            is_legacy_id or is_repeated_current_id
+        ):
+            continue
         try:
             registry.async_update_entity(
-                entity.entity_id, new_entity_id=f"{current_prefix}{suffix}"
+                entity.entity_id, new_entity_id=target_entity_id
             )
         except (ValueError, KeyError):
             # A conflicting or manually occupied target ID must not block setup.
             continue
+
+
+def _has_repeated_entity_prefix(entity_object_id: str, target_object_id: str) -> bool:
+    """Detect IDs expanded by repeatedly appending the schedule-bearing prefix."""
+    prefix = target_object_id.rsplit("_", 1)[0]
+    if not entity_object_id.startswith(prefix):
+        return False
+    remainder = entity_object_id[len(prefix) :]
+    prefix_count = 1
+    while remainder.startswith(f"_{prefix}"):
+        remainder = remainder[len(prefix) + 1 :]
+        prefix_count += 1
+    expected_suffix = target_object_id[len(prefix) :]
+    return prefix_count > 1 and remainder in {"", expected_suffix}
 
 
 def _is_expired_one_time_connection(

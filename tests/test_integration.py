@@ -137,6 +137,9 @@ class _FakeEntityRegistry:
 
     def async_update_entity(self, entity_id, **kwargs):
         self.updates.append((entity_id, kwargs))
+        for item in self.entries:
+            if item.entity_id == entity_id and "new_entity_id" in kwargs:
+                item.entity_id = kwargs["new_entity_id"]
 
     def async_remove(self, entity_id):
         self.removals.append(entity_id)
@@ -411,6 +414,32 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_connection_disappearance_and_recovery_are_logged_once(self):
+        entry = types.SimpleNamespace(data={}, options={})
+        fake_api = types.SimpleNamespace(
+            async_get_connections=AsyncMock(
+                side_effect=[[{"id": "route"}], [], [], [{"id": "route"}]]
+            )
+        )
+        coordinator = coordinator_module.TrainTrackCoordinator(
+            types.SimpleNamespace(), entry, api=fake_api
+        )
+
+        with self.assertLogs(coordinator_module.LOGGER, level="INFO") as captured:
+            await coordinator._async_update_data()
+            await coordinator._async_update_data()
+            await coordinator._async_update_data()
+            await coordinator._async_update_data()
+
+        messages = [record.getMessage() for record in captured.records]
+        self.assertEqual(
+            messages,
+            [
+                "Connection route disappeared from a successful API response",
+                "Connection route reappeared in the API response",
+            ],
+        )
+
     async def test_poll_interval_prefers_options_then_config(self):
         entry = types.SimpleNamespace(data={"base_url": "https://train", "api_key": "k", "scan_interval": 300}, options={"scan_interval": 600})
         coordinator = coordinator_module.TrainTrackCoordinator(types.SimpleNamespace(), entry, api=types.SimpleNamespace())
@@ -659,11 +688,61 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         )
         target_id = f"sensor.{sensor_module.slugify(sensor_module._connection_name({
             'origin': 'A', 'destination': 'B', 'departureTime': '08:00', 'weekdays': [1]
-        }))}"
+        }))}_status"
         self.assertEqual(
             registry.updates,
             [("sensor.a_b", {"new_entity_id": target_id})],
         )
+
+    def test_registered_entity_ids_with_repeated_schedule_are_normalized_once(self):
+        route = {
+            "id": "connection",
+            "origin": "Brandenburg Kirchmöser Bhf S",
+            "destination": "Potsdam Hauptbahnhof",
+            "departureTime": "06:56",
+            "weekdays": [2, 3, 4, 5],
+        }
+        schedule_prefix = sensor_module.slugify(sensor_module._connection_name(route))
+        repeated_entity_id = f"sensor.{schedule_prefix}_{schedule_prefix}_{schedule_prefix}"
+        entity = types.SimpleNamespace(
+            config_entry_id="entry",
+            unique_id="owner_connection_status",
+            entity_id=repeated_entity_id,
+        )
+        registry = _FakeEntityRegistry([entity])
+        hass = types.SimpleNamespace(entity_registry=registry)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+
+        target_id = f"sensor.{schedule_prefix}_status"
+        self.assertEqual(entity.entity_id, target_id)
+        self.assertEqual(
+            registry.updates,
+            [(repeated_entity_id, {"new_entity_id": target_id})],
+        )
+
+    def test_registered_entity_id_refresh_preserves_unrecognized_custom_ids(self):
+        route = {
+            "id": "connection",
+            "origin": "A",
+            "destination": "B",
+            "departureTime": "08:00",
+            "weekdays": [1],
+        }
+        entity = types.SimpleNamespace(
+            config_entry_id="entry",
+            unique_id="owner_connection_status",
+            entity_id="sensor.my_custom_name",
+        )
+        registry = _FakeEntityRegistry([entity])
+        hass = types.SimpleNamespace(entity_registry=registry)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+
+        self.assertEqual(registry.updates, [])
 
     async def test_expired_connections_remove_entities_and_devices(self):
         registered_entity = types.SimpleNamespace(

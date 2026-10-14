@@ -4,6 +4,10 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.5.3-dev.1 (Development)
+
+- Normalize Home Assistant entity IDs when repeated schedule names accumulated in the registry.
+- Log when a monitored connection disappears from or reappears in a successful API response.
 - Fix the options flow crashing when Home Assistant loads its configuration form.
 
 ## 0.5.2-dev.1 (Development)
