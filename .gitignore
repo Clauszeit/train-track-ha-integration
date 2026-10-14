@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Home Assistant
+.storage/
+home-assistant_v2.db*
+*.db-shm
+*.db-wal
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+secrets.yaml
+*.pem
+*.key
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

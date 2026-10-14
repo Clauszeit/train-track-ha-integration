@@ -1,0 +1,20 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    name: Home Assistant validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Validate integration
+        uses: home-assistant/actions/hassfest@master
