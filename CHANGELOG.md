@@ -5,6 +5,7 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 ## Unreleased
 
 - Refresh automatically managed Home Assistant device names in the registry and preserve names set by users.
+- Use the main TrainTrack logo for Home Assistant branding.
 
 ## 0.4.3-dev.1 (Development)
 
