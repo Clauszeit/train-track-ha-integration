@@ -287,7 +287,7 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_user_flow_reports_url_auth_and_connection_errors(self):
         flow = config_flow.TrainTrackConfigFlow()
         flow.hass = types.SimpleNamespace(session=_FakeSession())
-        base = {"base_url": "http://remote.example", "api_key": "secret", "scan_interval": 300}
+        base = {"base_url": "ftp://remote.example", "api_key": "secret", "scan_interval": 300}
         self.assertEqual((await flow.async_step_user(base))["errors"]["base"], "invalid_url")
         base["base_url"] = "https://train.example"
         base["api_key"] = ""
@@ -302,9 +302,9 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
         base["base_url"] = "http://localhost:8080"
         flow.hass.session = _FakeSession(_FakeResponse(payload={"user": {"id": "local"}}))
         self.assertEqual((await flow.async_step_user(base))["data"]["base_url"], base["base_url"])
-        base["base_url"] = "http://webserver:8080"
+        base["base_url"] = "http://remote.example:9123"
         self.assertEqual((await flow.async_step_user(base))["data"]["base_url"], base["base_url"])
-        base["base_url"] = "http://webserver"
+        base["base_url"] = "http://remote.example:invalid"
         self.assertEqual((await flow.async_step_user(base))["errors"]["base"], "invalid_url")
 
     async def test_reconfigure_and_reauthentication_replace_credentials(self):
@@ -321,8 +321,8 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(form["step_id"], "reconfigure")
         updated = await flow.async_step_reconfigure({"base_url": "https://new.example", "api_key": "new"})
         self.assertEqual(updated["data_updates"]["api_key"], "new")
-        failed_update = await flow.async_step_reconfigure({"base_url": "http://remote.example", "api_key": "new"})
-        self.assertEqual(failed_update["errors"]["base"], "invalid_url")
+        updated_http = await flow.async_step_reconfigure({"base_url": "http://other.example:8080", "api_key": "new"})
+        self.assertEqual(updated_http["data_updates"]["base_url"], "http://other.example:8080")
         reauth = await flow.async_step_reauth({})
         self.assertEqual(reauth["step_id"], "reauth_confirm")
         replaced = await flow.async_step_reauth_confirm({"base_url": "https://new.example", "api_key": "new"})

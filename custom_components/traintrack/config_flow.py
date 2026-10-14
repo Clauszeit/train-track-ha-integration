@@ -76,19 +76,13 @@ async def _validate_input(
         port = parsed_url.port
     except ValueError:
         return None, "invalid_url"
-    secure_url = parsed_url.scheme == "https" and bool(parsed_url.hostname)
-    local_http_url = parsed_url.scheme == "http" and parsed_url.hostname in {
-        "localhost",
-        "127.0.0.1",
-        "::1",
-    }
-    docker_http_url = (
-        parsed_url.scheme == "http"
-        and parsed_url.hostname == "webserver"
-        and port == 8080
+    supported_url = (
+        parsed_url.scheme in {"http", "https"}
+        and bool(parsed_url.hostname)
+        and (port is None or 1 <= port <= 65535)
     )
     if (
-        not (secure_url or local_http_url or docker_http_url)
+        not supported_url
         or parsed_url.username
         or parsed_url.password
         or parsed_url.query

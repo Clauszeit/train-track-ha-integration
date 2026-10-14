@@ -14,9 +14,9 @@ Each sensor also exposes the route, weekday or service date, monitor details, ob
 
 1. Sign in to TrainTrack through its SSO provider and open **Einstellungen → API-Schlüssel**.
 2. Create a key named **Home Assistant** and copy the value shown once.
-3. In Home Assistant, add the **TrainTrack** integration and enter the URL of your TrainTrack instance, the API key, and an initial polling interval. Use the public HTTPS URL when Home Assistant is outside the Docker network. When both containers share the Compose network, use `http://webserver:8080`.
+3. In Home Assistant, add the **TrainTrack** integration and enter the URL by which Home Assistant can reach your TrainTrack instance, the API key, and an initial polling interval. For example, when both containers share the default TrainTrack Compose network, use `http://webserver:8080`; for other network layouts, enter the hostname or IP address and port configured for your server.
 
-The API key is stored in the Home Assistant config entry and grants read-only access to your account's session identity and connections. TrainTrack stores only its hash. HTTPS is required except for localhost during local development and the explicitly supported `http://webserver:8080` Compose endpoint. That internal Docker connection sends the API key without TLS, so use it only on a trusted, isolated Docker network. You can change the polling interval later in Home Assistant's integration options (30–3600 seconds, in 30-second steps). If a key is revoked, Home Assistant asks for a replacement.
+The API key is stored in the Home Assistant config entry and grants read-only access to your account's session identity and connections. TrainTrack stores only its hash. Both HTTP and HTTPS URLs are supported so the address can match your network. HTTPS protects the API key in transit; use HTTP only on a trusted, isolated network because it sends the key without TLS. You can change the polling interval later in Home Assistant's integration options (30–3600 seconds, in 30-second steps). If a key is revoked, Home Assistant asks for a replacement.
 
 This integration is read-only. It does not create, update, delete, or select TrainTrack connections.
 
