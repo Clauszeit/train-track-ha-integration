@@ -21,6 +21,6 @@ Provide a Home Assistant custom integration for TrainTrack. Use documented, supp
 
 ## Home Assistant integration
 
-- Keep the integration under `custom_components/traintrack/` and validate it with Home Assistant's `hassfest` workflow.
+- Keep the integration under `custom_components/traintrack/`, describe it in the root `hacs.json`, and validate it with both the HACS action and Home Assistant's `hassfest` workflow.
 - Use only documented Home Assistant interfaces and the official TrainTrack API.
 - Treat unavailable API responses and authentication errors as recoverable integration states; avoid exposing credentials in logs.
