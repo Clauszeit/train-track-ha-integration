@@ -32,7 +32,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_migrate_entry(  # NOSONAR: required async HA hook; update_entry is synchronous.
+async def async_migrate_entry(  # NOSONAR(S7503)
     hass: HomeAssistant, entry: ConfigEntry
 ) -> bool:
     """Migrate configuration entries when needed."""

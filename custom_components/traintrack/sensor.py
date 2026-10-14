@@ -33,7 +33,7 @@ SENSORS = (
 )
 
 
-async def async_setup_entry(  # NOSONAR: required async HA hook; add_entities is synchronous.
+async def async_setup_entry(  # NOSONAR(S7503)
     hass: HomeAssistant,
     entry: Any,
     async_add_entities: AddEntitiesCallback,

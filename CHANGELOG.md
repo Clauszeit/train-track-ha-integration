@@ -4,6 +4,11 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.3.2-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Korrigiert die Sonar-Suppressionssyntax für erforderliche asynchrone Home-Assistant-Hooks.
+
 ## 0.3.1-dev.1 (Development)
 
 - Prepare the development push and carry forward all accumulated unreleased changes.
