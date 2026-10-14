@@ -10,6 +10,8 @@ The integration polls the authenticated user's monitored connections and creates
 
 Each connection device and its sensor names include the scheduled departure time; recurring services also show weekdays, one-time services show their date, and grouped legs show their position. Sensors expose the full API connection data plus readable attributes for scheduled arrival times, connection type, transfer details, current monitor message and state, train, delay, operating date, trip, platform, change details, urgency, historical context, observations, and history. New connections appear after the next poll. API outages mark entities unavailable; a revoked API key opens Home Assistant's reauthentication flow.
 
+The complete device and entity reference documents the naming rules, sensor states, every API and normalized attribute, history structures, optional values, and availability behavior: [Devices and entities](docs/ENTITIES.md).
+
 ## Configure the integration
 
 1. Sign in to TrainTrack through its SSO provider and open **Einstellungen → API-Schlüssel**.

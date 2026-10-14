@@ -4,8 +4,12 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
-- Document the actual HACS development channel, CI behavior, version preparation, and final release steps.
-- Correct the invalid URL message to match support for user-configured HTTP and HTTPS addresses.
+- Add a complete reference for Home Assistant devices, sensors, names, states, attributes, histories, and availability.
+
+## 0.4.2-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Add a complete reference for Home Assistant devices, sensors, names, states, attributes, histories, and availability.
 
 ## 0.4.1-dev.1 (Development)
 
