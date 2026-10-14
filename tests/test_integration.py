@@ -302,6 +302,10 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
         base["base_url"] = "http://localhost:8080"
         flow.hass.session = _FakeSession(_FakeResponse(payload={"user": {"id": "local"}}))
         self.assertEqual((await flow.async_step_user(base))["data"]["base_url"], base["base_url"])
+        base["base_url"] = "http://webserver:8080"
+        self.assertEqual((await flow.async_step_user(base))["data"]["base_url"], base["base_url"])
+        base["base_url"] = "http://webserver"
+        self.assertEqual((await flow.async_step_user(base))["errors"]["base"], "invalid_url")
 
     async def test_reconfigure_and_reauthentication_replace_credentials(self):
         entry = types.SimpleNamespace(data={"base_url": "https://old.example", "api_key": "old"})
