@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import re
 import sys
 import types
 import unittest
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -134,9 +136,46 @@ class _FakeEntityRegistry:
     def __init__(self, entries=None):
         self.entries = entries or []
         self.updates = []
+        self.creates = []
         self.removals = []
 
+    def async_get_entity_id(self, domain, platform, unique_id):
+        for item in self.entries:
+            if item.unique_id == unique_id and item.entity_id.startswith(f"{domain}."):
+                return item.entity_id
+        return None
+
+    def async_get_or_create(self, domain, platform, unique_id, **kwargs):
+        entity_id = self.async_get_entity_id(domain, platform, unique_id)
+        if entity_id is not None:
+            return next(item for item in self.entries if item.entity_id == entity_id)
+        entity_id = self.async_get_available_entity_id(domain, kwargs["suggested_object_id"])
+        self.creates.append((unique_id, kwargs))
+        entity = types.SimpleNamespace(
+            config_entry_id=kwargs["config_entry"].entry_id,
+            unique_id=unique_id,
+            entity_id=entity_id,
+        )
+        self.entries.append(entity)
+        return entity
+
+    def async_get_available_entity_id(
+        self, domain, suggested_object_id, *, current_entity_id=None
+    ):
+        candidate = f"{domain}.{suggested_object_id}"
+        occupied = {item.entity_id for item in self.entries if item.entity_id != current_entity_id}
+        suffix = 2
+        while candidate in occupied:
+            candidate = f"{domain}.{suggested_object_id}_{suffix}"
+            suffix += 1
+        return candidate
+
     def async_update_entity(self, entity_id, **kwargs):
+        if any(
+            item.entity_id == kwargs.get("new_entity_id") and item.entity_id != entity_id
+            for item in self.entries
+        ):
+            raise ValueError("Entity ID already exists")
         self.updates.append((entity_id, kwargs))
         for item in self.entries:
             if item.entity_id == entity_id and "new_entity_id" in kwargs:
@@ -264,10 +303,11 @@ def _install_home_assistant_stubs():
         SensorEntity=_SensorEntity,
         SensorEntityDescription=_SensorEntityDescription,
     )
-    util = _module(
-        "homeassistant.util",
-        slugify=lambda value: value.lower().replace(" → ", "_").replace(" ", "_"),
-    )
+    def slugify(value):
+        ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+        return re.sub(r"[^a-z0-9]+", "_", ascii_value.lower()).strip("_")
+
+    util = _module("homeassistant.util", slugify=slugify)
     util.dt = types.SimpleNamespace(now=lambda: datetime.now(timezone.utc))
 
 
@@ -688,7 +728,7 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(device.name, "My Train")
         self.assertEqual(registry.updates, [])
 
-    def test_registered_entity_ids_gain_schedule_details(self):
+    def test_registered_route_entity_ids_become_short_and_stable(self):
         entity = types.SimpleNamespace(
             config_entry_id="entry",
             unique_id="owner_connection_status",
@@ -697,53 +737,115 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         registry = _FakeEntityRegistry([entity])
         hass = types.SimpleNamespace(entity_registry=registry)
         entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
-        sensor_module._refresh_registered_entity_ids(
-            hass,
-            entry,
-            {
-                "id": "connection",
-                "origin": "A",
-                "destination": "B",
-                "departureTime": "08:00",
-                "weekdays": [1],
-            },
-        )
-        target_id = f"sensor.{sensor_module.slugify(sensor_module._connection_name({
-            'origin': 'A', 'destination': 'B', 'departureTime': '08:00', 'weekdays': [1]
-        }))}_status"
+        route = {
+            "id": "connection",
+            "origin": "A",
+            "destination": "B",
+            "departureTime": "08:00",
+            "weekdays": [1],
+        }
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+        target_id = f"sensor.{sensor_module._stable_entity_object_id('owner', 'connection', 'status')}"
         self.assertEqual(
             registry.updates,
             [("sensor.a_b", {"new_entity_id": target_id})],
         )
+        self.assertEqual(len(registry.creates), 2)
+        self.assertEqual({item.entity_id for item in registry.entries}, {
+            f"sensor.{sensor_module._stable_entity_object_id('owner', 'connection', key)}"
+            for key in ("status", "train", "delay")
+        })
+        route["departureTime"] = "09:00"
+        route["weekdays"] = [2, 3]
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+        self.assertEqual(len(registry.updates), 1)
+        self.assertEqual(len(registry.creates), 2)
 
-    def test_registered_entity_ids_with_repeated_schedule_are_normalized_once(self):
+    def test_repeated_schedule_fragment_and_collision_suffix_are_migrated_once(self):
         route = {
             "id": "connection",
-            "origin": "Brandenburg Kirchmöser Bhf S",
-            "destination": "Potsdam Hauptbahnhof",
-            "departureTime": "06:56",
-            "weekdays": [2, 3, 4, 5],
+            "origin": "S Potsdam Hauptbahnhof",
+            "destination": "Brandenburg Kirchmöser Bhf",
+            "departureTime": "17:31",
+            "weekdays": [2, 3],
         }
-        schedule_prefix = sensor_module.slugify(sensor_module._connection_name(route))
-        repeated_entity_id = f"sensor.{schedule_prefix}_{schedule_prefix}_{schedule_prefix}"
-        entity = types.SimpleNamespace(
-            config_entry_id="entry",
-            unique_id="owner_connection_status",
-            entity_id=repeated_entity_id,
+        route_prefix = sensor_module.slugify(sensor_module._connection_name(route))
+        self.assertEqual(route_prefix, "s_potsdam_hauptbahnhof_brandenburg_kirchmoser_bhf_17_31_di_mi")
+        target_id = f"sensor.{sensor_module._stable_entity_object_id('owner', 'connection', 'status')}"
+        bloated_ids = (
+            f"sensor.{route_prefix}{'_17_31_di_mi' * 16}_4",
+            f"sensor.{route_prefix}_{route_prefix}_{route_prefix}",
+            f"sensor.{route_prefix}{'_17_31_di_mi' * 16}"[:250] + "_4",
         )
+        for bloated_id in bloated_ids:
+            with self.subTest(bloated_id=bloated_id):
+                entity = types.SimpleNamespace(
+                    config_entry_id="entry",
+                    unique_id="owner_connection_status",
+                    entity_id=bloated_id,
+                )
+                registry = _FakeEntityRegistry([entity])
+                hass = types.SimpleNamespace(entity_registry=registry)
+                entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+
+                sensor_module._refresh_registered_entity_ids(hass, entry, route)
+                sensor_module._refresh_registered_entity_ids(hass, entry, route)
+
+                self.assertEqual(entity.entity_id, target_id)
+                self.assertEqual(
+                    registry.updates,
+                    [(bloated_id, {"new_entity_id": target_id})],
+                )
+
+    def test_new_sensor_ids_start_with_their_purpose(self):
+        registry = _FakeEntityRegistry()
+        hass = types.SimpleNamespace(entity_registry=registry)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+        route = {"id": "connection", "origin": "A", "destination": "B"}
+
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+        sensor_module._refresh_registered_entity_ids(hass, entry, route)
+
+        self.assertEqual(len(registry.creates), 3)
+        for sensor_key in ("status", "train", "delay"):
+            entity_id = registry.async_get_entity_id(
+                "sensor", "traintrack", f"owner_connection_{sensor_key}"
+            )
+            self.assertRegex(entity_id, rf"^sensor\.traintrack_{sensor_key}_[0-9a-f]{{16}}$")
+
+    def test_single_schedule_id_with_numeric_suffix_is_migrated(self):
+        route = {
+            "id": "connection",
+            "origin": "A",
+            "destination": "B",
+            "departureTime": "08:00",
+            "weekdays": [1],
+        }
+        old_id = f"sensor.{sensor_module.slugify(sensor_module._connection_name(route))}_train_3"
+        entity = types.SimpleNamespace(unique_id="owner_connection_train", entity_id=old_id)
         registry = _FakeEntityRegistry([entity])
         hass = types.SimpleNamespace(entity_registry=registry)
         entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
 
         sensor_module._refresh_registered_entity_ids(hass, entry, route)
-        sensor_module._refresh_registered_entity_ids(hass, entry, route)
 
-        target_id = f"sensor.{schedule_prefix}_status"
-        self.assertEqual(entity.entity_id, target_id)
-        self.assertEqual(
-            registry.updates,
-            [(repeated_entity_id, {"new_entity_id": target_id})],
+        target = f"sensor.{sensor_module._stable_entity_object_id('owner', 'connection', 'train')}"
+        self.assertEqual(entity.entity_id, target)
+
+    def test_legacy_id_without_schedule_and_target_collision(self):
+        target = f"sensor.{sensor_module._stable_entity_object_id('owner', 'connection', 'status')}"
+        old = types.SimpleNamespace(unique_id="owner_connection_status", entity_id="sensor.a_b")
+        occupied = types.SimpleNamespace(unique_id="other", entity_id=target)
+        registry = _FakeEntityRegistry([old, occupied])
+        hass = types.SimpleNamespace(entity_registry=registry)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+
+        sensor_module._refresh_registered_entity_ids(
+            hass, entry, {"id": "connection", "origin": "A", "destination": "B"}
         )
+
+        self.assertEqual(old.entity_id, f"{target}_2")
+        self.assertEqual(occupied.entity_id, target)
 
     def test_registered_entity_id_refresh_preserves_unrecognized_custom_ids(self):
         route = {

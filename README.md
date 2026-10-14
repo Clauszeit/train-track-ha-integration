@@ -10,6 +10,8 @@ The integration polls the authenticated user's monitored connections and creates
 
 Each connection device includes the scheduled departure time in its name; recurring services also show weekdays, one-time services show their date, and grouped legs show their position. On the device page, the three sensors are labeled Status, Train, and Delay (Status, Zug, and Verspätung in German). Sensors expose the full API connection data plus readable attributes for scheduled arrival times, connection type, transfer details, current monitor message and state, train, delay, operating date, trip, platform, change details, urgency, historical context, observations, and history. New connections appear after the next poll. API outages mark entities unavailable; a revoked API key opens Home Assistant's reauthentication flow.
 
+Sensor entity IDs start with `sensor.traintrack_status_`, `sensor.traintrack_train_`, or `sensor.traintrack_delay_` followed by a stable 16-character identifier. Older automatically generated route IDs, including repeated schedule fragments, are migrated on update. Update any dashboards, templates, or automations that refer to an old generated entity ID; manually renamed IDs are preserved.
+
 The complete device and entity reference documents the naming rules, sensor states, every API and normalized attribute, history structures, optional values, and availability behavior: [Devices and entities](docs/ENTITIES.md).
 
 ## Configure the integration

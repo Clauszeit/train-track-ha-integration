@@ -4,6 +4,10 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.5.5-dev.1 (Development)
+
+- Replace long route-based sensor IDs with stable purpose-first IDs and migrate repeated schedule fragments, including truncated and suffixed IDs.
+
 ## 0.5.4-dev.1 (Development)
 
 - Ship runtime English and German translations so the device page shows distinct Status, Train/Zug, and Delay/Verspätung sensor names.

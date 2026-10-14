@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from hashlib import blake2s
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
@@ -21,7 +22,8 @@ from .const import (
 )
 from .coordinator import TrainTrackCoordinator
 
-SENSOR_ENTITY_PREFIX = "sensor."
+SENSOR_DOMAIN = "sensor"
+SENSOR_ENTITY_PREFIX = f"{SENSOR_DOMAIN}."
 
 SENSORS = (
     SensorEntityDescription(
@@ -176,58 +178,88 @@ def _refresh_registered_device_name(
 def _refresh_registered_entity_ids(
     hass: HomeAssistant, entry: Any, connection: dict[str, Any]
 ) -> None:
-    """Migrate legacy and repeatedly expanded route entity IDs."""
+    """Give new sensors stable IDs and migrate recognizable generated IDs."""
+    connection_id = str(connection.get("id", ""))
+    if not connection_id:
+        return
     origin = connection.get("origin") or "Unbekannter Start"
     destination = connection.get("destination") or "Unbekanntes Ziel"
-    legacy_prefix = f"{SENSOR_ENTITY_PREFIX}{slugify(f'{origin} {destination}') }"
-    current_prefix = f"{SENSOR_ENTITY_PREFIX}{slugify(_connection_name(connection))}"
-    if legacy_prefix == current_prefix:
-        return
-
+    legacy_object_id = slugify(f"{origin} {destination}")
+    route_only_object_id = slugify(f"{origin} → {destination}")
+    route_object_id = slugify(_connection_name(connection))
+    schedule_object_id = route_object_id.removeprefix(route_only_object_id).lstrip("_")
     registry = er.async_get(hass)
-    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
-        unique_id_prefix = f"{entry.unique_id}_{connection.get('id')}_"
-        if not entity.unique_id.startswith(unique_id_prefix):
+    for description in SENSORS:
+        sensor_key = description.key
+        unique_id = f"{entry.unique_id}_{connection_id}_{sensor_key}"
+        suggested_object_id = _stable_entity_object_id(entry.unique_id, connection_id, sensor_key)
+        target_entity_id = f"{SENSOR_ENTITY_PREFIX}{suggested_object_id}"
+        registered_entity_id = registry.async_get_entity_id(SENSOR_DOMAIN, DOMAIN, unique_id)
+        if registered_entity_id is None:
+            registry.async_get_or_create(
+                SENSOR_DOMAIN,
+                DOMAIN,
+                unique_id,
+                config_entry=entry,
+                suggested_object_id=suggested_object_id,
+                has_entity_name=True,
+                translation_key=description.translation_key,
+            )
             continue
-        sensor_key = entity.unique_id[len(unique_id_prefix) :]
-        if sensor_key not in {description.key for description in SENSORS}:
-            continue
-        target_entity_id = f"{current_prefix}_{sensor_key}"
-        entity_object_id = entity.entity_id.removeprefix(SENSOR_ENTITY_PREFIX)
-        target_object_id = target_entity_id.removeprefix(SENSOR_ENTITY_PREFIX)
-        legacy_object_id = legacy_prefix.removeprefix(SENSOR_ENTITY_PREFIX)
-        is_legacy_id = entity_object_id in {
+        entity_object_id = registered_entity_id.removeprefix(SENSOR_ENTITY_PREFIX)
+        if registered_entity_id == target_entity_id or not _is_generated_entity_id(
+            entity_object_id,
+            sensor_key,
             legacy_object_id,
-            f"{legacy_object_id}_{sensor_key}",
-        }
-        is_repeated_current_id = _has_repeated_entity_prefix(
-            entity_object_id, target_object_id
-        )
-        if entity.entity_id == target_entity_id or not (
-            is_legacy_id or is_repeated_current_id
+            route_object_id,
+            schedule_object_id,
         ):
             continue
         try:
+            available_entity_id = registry.async_get_available_entity_id(
+                SENSOR_DOMAIN,
+                suggested_object_id,
+                current_entity_id=registered_entity_id,
+            )
             registry.async_update_entity(
-                entity.entity_id, new_entity_id=target_entity_id
+                registered_entity_id, new_entity_id=available_entity_id
             )
         except (ValueError, KeyError):
             # A conflicting or manually occupied target ID must not block setup.
             continue
 
 
-def _has_repeated_entity_prefix(entity_object_id: str, target_object_id: str) -> bool:
-    """Detect IDs expanded by repeatedly appending the schedule-bearing prefix."""
-    prefix = target_object_id.rsplit("_", 1)[0]
-    if not entity_object_id.startswith(prefix):
-        return False
-    remainder = entity_object_id[len(prefix) :]
-    prefix_count = 1
-    while remainder.startswith(f"_{prefix}"):
-        remainder = remainder[len(prefix) + 1 :]
-        prefix_count += 1
-    expected_suffix = target_object_id[len(prefix) :]
-    return prefix_count > 1 and remainder in {"", expected_suffix}
+def _stable_entity_object_id(
+    entry_unique_id: str, connection_id: str, sensor_key: str
+) -> str:
+    """Identify a sensor without putting changeable schedule text in its ID."""
+    digest = blake2s(
+        f"{entry_unique_id}\0{connection_id}".encode(), digest_size=8
+    ).hexdigest()
+    return f"traintrack_{sensor_key}_{digest}"
+
+
+def _is_generated_entity_id(
+    object_id: str,
+    sensor_key: str,
+    legacy_object_id: str,
+    route_object_id: str,
+    schedule_object_id: str,
+) -> bool:
+    """Recognize our old IDs, including repeated or truncated schedules."""
+    for prefix in (legacy_object_id, route_object_id):
+        if object_id in {prefix, f"{prefix}_{sensor_key}"}:
+            return True
+        for candidate in (prefix, f"{prefix}_{sensor_key}"):
+            if object_id.startswith(f"{candidate}_") and object_id[
+                len(candidate) + 1 :
+            ].isdigit():
+                return True
+    if schedule_object_id and object_id.startswith(
+        f"{route_object_id}_{schedule_object_id}"
+    ):
+        return True
+    return object_id.startswith(f"{route_object_id}_{route_object_id}")
 
 
 def _is_expired_one_time_connection(
