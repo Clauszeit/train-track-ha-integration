@@ -4,11 +4,14 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.2.4-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+
+- Pinnt alle Workflow-Jobs auf `ubuntu-24.04`, damit der angekündigte Wechsel von `ubuntu-latest` auf Ubuntu 26 die Validierung nicht unerwartet verändert.
 - Aktualisiert Checkout auf v7.0.1 und SonarQube Scan Action auf v8.3.0; HACS Action 22.5.0 ist bereits aktuell. Hassfest folgt der offiziellen `@master`-Referenz, da keine versionierten Releases angeboten werden.
 
 ## 0.2.3-dev.1 (Development)
-
-- Prepare the development push and carry forward all accumulated unreleased changes.
 
 - Sort Home Assistant manifest keys with `domain` and `name` first and all remaining keys alphabetically for hassfest.
 

@@ -12,7 +12,7 @@ permissions: {}
 jobs:
   hacs:
     name: HACS validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate HACS integration repository
         uses: hacs/action@22.5.0
@@ -21,7 +21,7 @@ jobs:
 
   hassfest:
     name: Home Assistant validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -35,7 +35,7 @@ jobs:
     name: SonarQube Quality Gate
     needs: [hacs, hassfest]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
