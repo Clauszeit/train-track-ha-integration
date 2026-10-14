@@ -473,6 +473,30 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
                 )
             )
 
+    def test_expired_existing_connections_are_selected_for_removal(self):
+        coordinator = _DataUpdateCoordinator(None)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+        connection = {
+            "id": "trip",
+            "origin": "A",
+            "destination": "B",
+            "connectionType": "one_time",
+            "serviceDate": "2026-10-01",
+        }
+        known_ids = {"trip"}
+        hass = types.SimpleNamespace()
+        with patch.object(
+            sensor_module.dt_util,
+            "now",
+            return_value=datetime(2026, 10, 9, tzinfo=timezone.utc),
+        ):
+            entities, expired = sensor_module._entities_for_connections(
+                hass, entry, coordinator, [connection], known_ids, 7
+            )
+        self.assertEqual(entities, [])
+        self.assertEqual(expired, [connection])
+        self.assertEqual(known_ids, {"trip"})
+
     async def test_entry_migration_replaces_cookie_and_sets_interval(self):
         saved = {}
         entry = types.SimpleNamespace(

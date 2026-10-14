@@ -97,41 +97,59 @@ async def async_setup_entry(  # NOSONAR(S7503)
     await _async_remove_expired_connections(hass, entry, platform, expired)
 
     def add_new_connections() -> None:
-        entities: list[TrainTrackConnectionSensor] = []
-        expired_connections: list[dict[str, Any]] = []
-        for connection in coordinator.data or []:
-            connection_id = str(connection.get("id", ""))
-            if not connection_id:
-                continue
-            if _is_expired_one_time_connection(connection, retention_days):
-                expired_connections.append(connection)
-                continue
-            _refresh_registered_device_name(hass, entry, connection)
-            _refresh_registered_entity_ids(hass, entry, connection)
-            if connection_id in known_connection_ids:
-                continue
-            known_connection_ids.add(connection_id)
-            entities.extend(
-                TrainTrackConnectionSensor(coordinator, entry, connection, description)
-                for description in SENSORS
-            )
+        entities, expired_connections = _entities_for_connections(
+            hass,
+            entry,
+            coordinator,
+            coordinator.data or [],
+            known_connection_ids,
+            retention_days,
+        )
         if entities:
             async_add_entities(entities)
-        newly_expired = [
-            connection
-            for connection in expired_connections
-            if str(connection.get("id")) in known_connection_ids
-        ]
-        if newly_expired:
+        if expired_connections:
             hass.async_create_task(
-                _async_remove_expired_connections(hass, entry, platform, newly_expired)
+                _async_remove_expired_connections(
+                    hass, entry, platform, expired_connections
+                )
             )
             known_connection_ids.difference_update(
-                str(connection.get("id")) for connection in newly_expired
+                str(connection.get("id")) for connection in expired_connections
             )
 
     add_new_connections()
     entry.async_on_unload(coordinator.async_add_listener(add_new_connections))
+
+
+def _entities_for_connections(
+    hass: HomeAssistant,
+    entry: Any,
+    coordinator: TrainTrackCoordinator,
+    connections: list[dict[str, Any]],
+    known_connection_ids: set[str],
+    retention_days: int,
+) -> tuple[list[TrainTrackConnectionSensor], list[dict[str, Any]]]:
+    """Create new entities and return already-added connections now expired."""
+    entities: list[TrainTrackConnectionSensor] = []
+    expired_connections: list[dict[str, Any]] = []
+    for connection in connections:
+        connection_id = str(connection.get("id", ""))
+        if not connection_id:
+            continue
+        if _is_expired_one_time_connection(connection, retention_days):
+            if connection_id in known_connection_ids:
+                expired_connections.append(connection)
+            continue
+        _refresh_registered_device_name(hass, entry, connection)
+        _refresh_registered_entity_ids(hass, entry, connection)
+        if connection_id in known_connection_ids:
+            continue
+        known_connection_ids.add(connection_id)
+        entities.extend(
+            TrainTrackConnectionSensor(coordinator, entry, connection, description)
+            for description in SENSORS
+        )
+    return entities, expired_connections
 
 
 def _refresh_registered_device_name(
