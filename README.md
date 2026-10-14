@@ -26,6 +26,8 @@ In HACS, open the menu, choose **Custom repositories**, add `https://github.com/
 
 Until an explicit release is requested, HACS uses the default branch. Normal pushes are development versions; published GitHub releases are reserved for explicitly requested releases.
 
+The integration is distributed as a **custom HACS repository** and is not currently listed in the HACS default catalog. The validation workflow checks changes but does not create packages, GitHub releases, or version bumps. See [Publishing and updates](docs/PUBLISHING.md) for the exact development and release process.
+
 ## Repository layout
 
 - `custom_components/traintrack/`: Home Assistant integration
@@ -40,4 +42,4 @@ Run the integration tests locally with `python -m unittest discover -s tests -v`
 
 ## Versioning and releases
 
-Every commit adds its user-visible change under `Unreleased` in `CHANGELOG.md`. Each push advances the version and moves all accumulated `Unreleased` entries into the next version's changelog section. Unless the user explicitly requests a release, pushed versions are marked as development versions and do not publish a final release. Major version bumps require explicit user approval. See `AGENTS.md` for the repository contribution rules.
+Use the documented [publishing process](docs/PUBLISHING.md) to prepare the development version before pushing or to create a final release after it has been explicitly approved. Major version bumps require explicit user approval. See `AGENTS.md` for the repository contribution rules.

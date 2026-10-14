@@ -30,7 +30,7 @@
     "error": {
       "cannot_connect": "Could not connect to TrainTrack. Check the URL and try again.",
       "invalid_auth": "TrainTrack rejected this API key.",
-      "invalid_url": "Use an HTTPS URL. HTTP is allowed only for localhost."
+      "invalid_url": "Use a valid HTTP or HTTPS URL without credentials, query parameters, or fragments."
     },
     "abort": {
       "reauth_entry_not_found": "The TrainTrack configuration entry could not be found."

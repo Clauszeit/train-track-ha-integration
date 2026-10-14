@@ -4,7 +4,14 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
-- Include scheduled times in device names and expose complete schedule and monitoring details on entities.
+- Document the actual HACS development channel, CI behavior, version preparation, and final release steps.
+- Correct the invalid URL message to match support for user-configured HTTP and HTTPS addresses.
+
+## 0.4.1-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Document the actual HACS development channel, CI behavior, version preparation, and final release steps.
+- Correct the invalid URL message to match support for user-configured HTTP and HTTPS addresses.
 
 ## 0.4.0-dev.1 (Development)
 
