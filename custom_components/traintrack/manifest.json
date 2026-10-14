@@ -8,5 +8,5 @@
   "issue_tracker": "https://github.com/Clauszeit/train-track-ha-integration/issues",
   "iot_class": "cloud_polling",
   "requirements": [],
-  "version": "0.2.0-dev.1"
+  "version": "0.2.1-dev.1"
 }

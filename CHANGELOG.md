@@ -4,6 +4,10 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.2.1-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+
 - Fail the SonarQube quality gate with the HACS and hassfest job results when either validation fails.
 
 ## 0.2.0-dev.1 (Development)
