@@ -4,6 +4,8 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+- Sort Home Assistant manifest keys with `domain` and `name` first and all remaining keys alphabetically for hassfest.
+
 ## 0.2.2-dev.1 (Development)
 
 - Prepare the development push and carry forward all accumulated unreleased changes.
