@@ -7,7 +7,7 @@ import importlib
 import sys
 import types
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -121,6 +121,28 @@ class _FakeDeviceRegistry:
                 return device
         raise AssertionError(f"Unknown device id: {device_id}")
 
+    def async_remove_device(self, device_id):
+        self.devices = {
+            key: device for key, device in self.devices.items() if device.id != device_id
+        }
+
+
+class _FakeEntityRegistry:
+    def __init__(self, entries=None):
+        self.entries = entries or []
+        self.updates = []
+        self.removals = []
+
+    def async_entries_for_config_entry(self, entry_id):
+        return [item for item in self.entries if item.config_entry_id == entry_id]
+
+    def async_update_entity(self, entity_id, **kwargs):
+        self.updates.append((entity_id, kwargs))
+
+    def async_remove(self, entity_id):
+        self.removals.append(entity_id)
+        self.entries = [item for item in self.entries if item.entity_id != entity_id]
+
 
 class _Selector:
     def __init__(self, config=None):
@@ -215,7 +237,15 @@ def _install_home_assistant_stubs():
         DeviceInfo=_DeviceInfo,
         async_get=lambda hass: hass.device_registry,
     )
-    _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object)
+    _module(
+        "homeassistant.helpers.entity_registry",
+        async_get=lambda hass: hass.entity_registry,
+    )
+    _module(
+        "homeassistant.helpers.entity_platform",
+        AddEntitiesCallback=object,
+        current_platform=types.SimpleNamespace(get=lambda: None),
+    )
     _module(
         "homeassistant.helpers.update_coordinator",
         DataUpdateCoordinator=_DataUpdateCoordinator,
@@ -228,6 +258,11 @@ def _install_home_assistant_stubs():
         SensorEntity=_SensorEntity,
         SensorEntityDescription=_SensorEntityDescription,
     )
+    util = _module(
+        "homeassistant.util",
+        slugify=lambda value: value.lower().replace(" → ", "_").replace(" ", "_"),
+    )
+    util.dt = types.SimpleNamespace(now=lambda: datetime.now(timezone.utc))
 
 
 _install_home_assistant_stubs()
@@ -365,9 +400,11 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
         flow = config_flow.TrainTrackOptionsFlow(entry)
         form = await flow.async_step_init()
         self.assertEqual(form["step_id"], "init")
-        result = await flow.async_step_init({"scan_interval": 900})
+        result = await flow.async_step_init({"scan_interval": 900, "one_time_retention_days": 14})
         self.assertEqual(result["data"]["scan_interval"], 900)
+        self.assertEqual(result["data"]["one_time_retention_days"], 14)
         self.assertEqual(config_flow._scan_interval_selector().config.step, 30)
+        self.assertEqual(config_flow._one_time_retention_selector().config.max, 365)
 
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
@@ -412,6 +449,29 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
             }
         )
         self.assertEqual(name, "C → D · 09:15 · 2026-10-15")
+
+    def test_one_time_retention_uses_configured_grace_period(self):
+        connection = {
+            "connectionType": "one_time",
+            "serviceDate": "2026-10-01",
+        }
+        with patch.object(
+            sensor_module.dt_util,
+            "now",
+            return_value=datetime(2026, 10, 8, tzinfo=timezone.utc),
+        ):
+            self.assertFalse(sensor_module._is_expired_one_time_connection(connection, 7))
+            self.assertTrue(sensor_module._is_expired_one_time_connection(connection, 6))
+            self.assertFalse(
+                sensor_module._is_expired_one_time_connection(
+                    {**connection, "serviceDate": "not-a-date"}, 1
+                )
+            )
+            self.assertFalse(
+                sensor_module._is_expired_one_time_connection(
+                    {**connection, "connectionType": "weekly"}, 1
+                )
+            )
 
     async def test_entry_migration_replaces_cookie_and_sets_interval(self):
         saved = {}
@@ -486,7 +546,9 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator = _DataUpdateCoordinator(None)
         coordinator.data = [route]
         added = []
-        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner", async_on_unload=lambda _: None)
+        entry = types.SimpleNamespace(
+            entry_id="entry", unique_id="owner", options={}, async_on_unload=lambda _: None
+        )
         device = types.SimpleNamespace(
             id="registered-device",
             name="A → B",
@@ -496,6 +558,7 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         hass = types.SimpleNamespace(
             data={"traintrack": {"entry": coordinator}},
             device_registry=registry,
+            entity_registry=_FakeEntityRegistry(),
         )
         await sensor_module.async_setup_entry(hass, entry, added.extend)
         self.assertEqual(len(added), 3)
@@ -546,6 +609,70 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(device.name, "My Train")
         self.assertEqual(registry.updates, [])
+
+    def test_registered_entity_ids_gain_schedule_details(self):
+        entity = types.SimpleNamespace(
+            config_entry_id="entry",
+            unique_id="owner_connection_status",
+            entity_id="sensor.a_b",
+        )
+        registry = _FakeEntityRegistry([entity])
+        hass = types.SimpleNamespace(entity_registry=registry)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+        sensor_module._refresh_registered_entity_ids(
+            hass,
+            entry,
+            {
+                "id": "connection",
+                "origin": "A",
+                "destination": "B",
+                "departureTime": "08:00",
+                "weekdays": [1],
+            },
+        )
+        target_id = f"sensor.{sensor_module.slugify(sensor_module._connection_name({
+            'origin': 'A', 'destination': 'B', 'departureTime': '08:00', 'weekdays': [1]
+        }))}"
+        self.assertEqual(
+            registry.updates,
+            [("sensor.a_b", {"new_entity_id": target_id})],
+        )
+
+    async def test_expired_connections_remove_entities_and_devices(self):
+        registered_entity = types.SimpleNamespace(
+            config_entry_id="entry",
+            unique_id="owner_trip_status",
+            entity_id="sensor.old_trip_status",
+        )
+        entity_registry = _FakeEntityRegistry([registered_entity])
+        device = types.SimpleNamespace(id="trip-device")
+        device_registry = _FakeDeviceRegistry(
+            {(("traintrack", "owner_trip"), "entry"): device}
+        )
+        hass = types.SimpleNamespace(
+            entity_registry=entity_registry,
+            device_registry=device_registry,
+        )
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+        platform = types.SimpleNamespace(
+            entities={"sensor.old_trip_status": object()},
+            removed=[],
+        )
+
+        async def remove_entity(entity_id):
+            platform.removed.append(entity_id)
+            platform.entities.pop(entity_id)
+
+        platform.async_remove_entity = remove_entity
+        await sensor_module._async_remove_expired_connections(
+            hass,
+            entry,
+            platform,
+            [{"id": "trip", "connectionType": "one_time", "serviceDate": "2026-01-01"}],
+        )
+        self.assertEqual(entity_registry.removals, ["sensor.old_trip_status"])
+        self.assertEqual(platform.removed, ["sensor.old_trip_status"])
+        self.assertEqual(device_registry.devices, {})
 
 
 if __name__ == "__main__":

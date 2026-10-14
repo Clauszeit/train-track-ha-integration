@@ -27,10 +27,14 @@ from .api import (
 from .const import (
     CONF_API_KEY,
     CONF_BASE_URL,
+    CONF_ONE_TIME_RETENTION_DAYS,
     CONF_SCAN_INTERVAL,
+    DEFAULT_ONE_TIME_RETENTION_DAYS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MAX_ONE_TIME_RETENTION_DAYS,
     MAX_SCAN_INTERVAL,
+    MIN_ONE_TIME_RETENTION_DAYS,
     MIN_SCAN_INTERVAL,
 )
 
@@ -62,6 +66,18 @@ def _scan_interval_selector() -> NumberSelector:
             step=30,
             mode=NumberSelectorMode.BOX,
             unit_of_measurement="s",
+        )
+    )
+
+
+def _one_time_retention_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=MIN_ONE_TIME_RETENTION_DAYS,
+            max=MAX_ONE_TIME_RETENTION_DAYS,
+            step=1,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement="d",
         )
     )
 
@@ -194,12 +210,12 @@ class TrainTrackConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        """Return the options flow for the polling interval."""
+        """Return the options flow for polling and trip retention."""
         return TrainTrackOptionsFlow(config_entry)
 
 
 class TrainTrackOptionsFlow(config_entries.OptionsFlow):
-    """Allow users to change the polling interval after setup."""
+    """Allow users to change polling and trip retention after setup."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
@@ -212,11 +228,17 @@ class TrainTrackOptionsFlow(config_entries.OptionsFlow):
             CONF_SCAN_INTERVAL,
             self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
+        retention_days = self.config_entry.options.get(
+            CONF_ONE_TIME_RETENTION_DAYS, DEFAULT_ONE_TIME_RETENTION_DAYS
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_SCAN_INTERVAL, default=current_interval): _scan_interval_selector(),
+                    vol.Required(
+                        CONF_ONE_TIME_RETENTION_DAYS, default=retention_days
+                    ): _one_time_retention_selector(),
                 }
             ),
         )

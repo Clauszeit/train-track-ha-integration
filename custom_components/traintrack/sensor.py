@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback, current_platform
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN
+from .const import (
+    CONF_ONE_TIME_RETENTION_DAYS,
+    DEFAULT_ONE_TIME_RETENTION_DAYS,
+    DOMAIN,
+)
 from .coordinator import TrainTrackCoordinator
 
 SENSORS = (
@@ -76,15 +83,31 @@ async def async_setup_entry(  # NOSONAR(S7503)
 ) -> None:
     """Create one set of sensors for each monitored connection."""
     coordinator: TrainTrackCoordinator = hass.data[DOMAIN][entry.entry_id]
+    platform = current_platform.get()
     known_connection_ids: set[str] = set()
+    retention_days = int(
+        entry.options.get(CONF_ONE_TIME_RETENTION_DAYS, DEFAULT_ONE_TIME_RETENTION_DAYS)
+    )
+
+    expired = [
+        connection
+        for connection in coordinator.data or []
+        if _is_expired_one_time_connection(connection, retention_days)
+    ]
+    await _async_remove_expired_connections(hass, entry, platform, expired)
 
     def add_new_connections() -> None:
         entities: list[TrainTrackConnectionSensor] = []
+        expired_connections: list[dict[str, Any]] = []
         for connection in coordinator.data or []:
             connection_id = str(connection.get("id", ""))
             if not connection_id:
                 continue
+            if _is_expired_one_time_connection(connection, retention_days):
+                expired_connections.append(connection)
+                continue
             _refresh_registered_device_name(hass, entry, connection)
+            _refresh_registered_entity_ids(hass, entry, connection)
             if connection_id in known_connection_ids:
                 continue
             known_connection_ids.add(connection_id)
@@ -94,6 +117,18 @@ async def async_setup_entry(  # NOSONAR(S7503)
             )
         if entities:
             async_add_entities(entities)
+        newly_expired = [
+            connection
+            for connection in expired_connections
+            if str(connection.get("id")) in known_connection_ids
+        ]
+        if newly_expired:
+            hass.async_create_task(
+                _async_remove_expired_connections(hass, entry, platform, newly_expired)
+            )
+            known_connection_ids.difference_update(
+                str(connection.get("id")) for connection in newly_expired
+            )
 
     add_new_connections()
     entry.async_on_unload(coordinator.async_add_listener(add_new_connections))
@@ -116,6 +151,80 @@ def _refresh_registered_device_name(
     name = _connection_name(connection)
     if device.name != name:
         registry.async_update_device(device.id, name=name)
+
+
+def _refresh_registered_entity_ids(
+    hass: HomeAssistant, entry: Any, connection: dict[str, Any]
+) -> None:
+    """Replace legacy route-only entity IDs with IDs containing the schedule."""
+    origin = connection.get("origin") or "Unbekannter Start"
+    destination = connection.get("destination") or "Unbekanntes Ziel"
+    legacy_prefix = f"sensor.{slugify(f'{origin} {destination}') }"
+    current_prefix = f"sensor.{slugify(_connection_name(connection))}"
+    if legacy_prefix == current_prefix:
+        return
+
+    registry = er.async_get(hass)
+    for entity in registry.async_entries_for_config_entry(entry.entry_id):
+        if not entity.unique_id.startswith(f"{entry.unique_id}_{connection.get('id')}_"):
+            continue
+        if not entity.entity_id.startswith(f"{legacy_prefix}_") and entity.entity_id != legacy_prefix:
+            continue
+        suffix = entity.entity_id[len(legacy_prefix):]
+        try:
+            registry.async_update_entity(
+                entity.entity_id, new_entity_id=f"{current_prefix}{suffix}"
+            )
+        except (ValueError, KeyError):
+            # A conflicting or manually occupied target ID must not block setup.
+            continue
+
+
+def _is_expired_one_time_connection(
+    connection: dict[str, Any], retention_days: int
+) -> bool:
+    """Return whether a completed one-time trip passed its retention period."""
+    if connection.get("connectionType") != "one_time":
+        return False
+    service_date = connection.get("serviceDate")
+    if not isinstance(service_date, str):
+        return False
+    try:
+        last_retained_date = date.fromisoformat(service_date) + timedelta(days=retention_days)
+    except ValueError:
+        return False
+    return dt_util.now().date() > last_retained_date
+
+
+async def _async_remove_expired_connections(
+    hass: HomeAssistant, entry: Any, platform: Any, connections: list[dict[str, Any]]
+) -> None:
+    """Remove expired one-time trips and their entities/devices from HA registries."""
+    if not connections:
+        return
+    entity_registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+    for connection in connections:
+        connection_id = str(connection.get("id", ""))
+        if not connection_id:
+            continue
+        unique_id_prefix = f"{entry.unique_id}_{connection_id}_"
+        registered_entities = [
+            entity
+            for entity in entity_registry.async_entries_for_config_entry(entry.entry_id)
+            if entity.unique_id.startswith(unique_id_prefix)
+        ]
+        for entity in registered_entities:
+            if platform is not None and entity.entity_id in platform.entities:
+                await platform.async_remove_entity(entity.entity_id)
+            entity_registry.async_remove(entity.entity_id)
+
+        identifier = f"{entry.unique_id}_{connection_id}"
+        device = device_registry.async_get_device_by_identifier(
+            (DOMAIN, identifier), entry.entry_id
+        )
+        if device is not None:
+            device_registry.async_remove_device(device.id)
 
 
 class TrainTrackConnectionSensor(CoordinatorEntity[TrainTrackCoordinator], SensorEntity):

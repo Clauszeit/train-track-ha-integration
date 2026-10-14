@@ -4,6 +4,14 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+- Migrate legacy route-only entity IDs and remove expired one-time trip devices after a configurable retention period.
+- Refresh automatically managed Home Assistant device names in the registry and preserve names set by users.
+- Use the main TrainTrack logo for Home Assistant branding.
+
+## 0.5.0-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Migrate legacy route-only entity IDs and remove expired one-time trip devices after a configurable retention period.
 - Refresh automatically managed Home Assistant device names in the registry and preserve names set by users.
 - Use the main TrainTrack logo for Home Assistant branding.
 

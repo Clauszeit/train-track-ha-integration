@@ -39,10 +39,11 @@
   "options": {
     "step": {
       "init": {
-        "title": "Polling interval",
-        "description": "Choose how often Home Assistant retrieves your TrainTrack connections (30 to 3600 seconds).",
+        "title": "Polling and trip retention",
+        "description": "Choose how often connections are retrieved and how long completed one-time trips remain in Home Assistant.",
         "data": {
-          "scan_interval": "Polling interval in seconds"
+          "scan_interval": "Polling interval in seconds",
+          "one_time_retention_days": "Keep completed one-time trips for (days)"
         }
       }
     }
