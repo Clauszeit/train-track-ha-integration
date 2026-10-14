@@ -8,7 +8,7 @@ The integration polls the authenticated user's monitored connections and creates
 - **Zug** with the matched train identifier
 - **Verspätung** with the reported delay in minutes
 
-Each sensor also exposes the route, weekday or service date, monitor details, observations, and available history as attributes. New connections appear after the next poll. API outages mark entities unavailable; a revoked API key opens Home Assistant's reauthentication flow.
+Each connection device and its sensor names include the scheduled departure time; recurring services also show weekdays, one-time services show their date, and grouped legs show their position. Sensors expose the full API connection data plus readable attributes for scheduled arrival times, connection type, transfer details, current monitor message and state, train, delay, operating date, trip, platform, change details, urgency, historical context, observations, and history. New connections appear after the next poll. API outages mark entities unavailable; a revoked API key opens Home Assistant's reauthentication flow.
 
 ## Configure the integration
 

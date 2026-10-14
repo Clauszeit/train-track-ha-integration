@@ -4,7 +4,12 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
-- Allow user-configured HTTP and HTTPS server URLs for different network layouts.
+- Include scheduled times in device names and expose complete schedule and monitoring details on entities.
+
+## 0.4.0-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Include scheduled times in device names and expose complete schedule and monitoring details on entities.
 
 ## 0.3.4-dev.1 (Development)
 

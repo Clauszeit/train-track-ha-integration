@@ -32,6 +32,41 @@ SENSORS = (
     ),
 )
 
+WEEKDAY_LABELS = {
+    1: "Mo",
+    2: "Di",
+    3: "Mi",
+    4: "Do",
+    5: "Fr",
+    6: "Sa",
+    7: "So",
+}
+
+
+def _connection_name(connection: dict[str, Any]) -> str:
+    """Build a device name that distinguishes routes by their schedule."""
+    origin = connection.get("origin") or "Unbekannter Start"
+    destination = connection.get("destination") or "Unbekanntes Ziel"
+    name = f"{origin} → {destination}"
+    departure_time = connection.get("departureTime")
+    if departure_time:
+        name += f" · {departure_time}"
+
+    if connection.get("connectionType") == "one_time":
+        if connection.get("serviceDate"):
+            name += f" · {connection['serviceDate']}"
+    else:
+        weekdays = connection.get("weekdays")
+        if isinstance(weekdays, list):
+            labels = [WEEKDAY_LABELS[day] for day in weekdays if day in WEEKDAY_LABELS]
+            if labels:
+                name += f" · {', '.join(labels)}"
+
+    group_position = connection.get("groupPosition")
+    if isinstance(group_position, int):
+        name += f" · Abschnitt {group_position}"
+    return name
+
 
 async def async_setup_entry(  # NOSONAR(S7503)
     hass: HomeAssistant,
@@ -79,10 +114,7 @@ class TrainTrackConnectionSensor(CoordinatorEntity[TrainTrackCoordinator], Senso
         self._attr_unique_id = f"{entry.unique_id}_{self._connection_id}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry.unique_id}_{self._connection_id}")},
-            name=(
-                f"{connection.get('origin', 'Unbekannt')} → "
-                f"{connection.get('destination', 'Unbekannt')}"
-            ),
+            name=_connection_name(connection),
             manufacturer="TrainTrack",
         )
 
@@ -110,18 +142,45 @@ class TrainTrackConnectionSensor(CoordinatorEntity[TrainTrackCoordinator], Senso
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Include route and monitor details for dashboards and automations."""
+        """Expose the full connection, schedule, and monitor payload."""
         connection = self._current_connection
-        return {
-            "origin": connection.get("origin"),
-            "destination": connection.get("destination"),
-            "departure_time": connection.get("departureTime"),
-            "weekdays": connection.get("weekdays"),
-            "service_date": connection.get("serviceDate"),
-            "monitor_status": connection.get("status"),
-            "history": connection.get("history", []),
-            "observations": connection.get("observations", []),
-        }
+        status = connection.get("status")
+        if not isinstance(status, dict):
+            status = {}
+        attributes = dict(connection)
+        attributes.update(
+            {
+                "connection_id": self._connection_id,
+                "route": _connection_name(connection),
+                "departure_time": connection.get("departureTime"),
+                "arrival_times_by_weekday": connection.get("arrivalTimesByWeekday", {}),
+                "connection_type": connection.get("connectionType", "weekly"),
+                "service_date": connection.get("serviceDate"),
+                "group_position": connection.get("groupPosition"),
+                "transfer_from_previous": connection.get("transferFromPrevious"),
+                "manual_selection": connection.get("manualSelection"),
+                "monitor_status": status,
+                "status_code": status.get("status"),
+                "status_message": status.get("message"),
+                "train": status.get("train"),
+                "delay_minutes": status.get("delayMinutes"),
+                "checked_at": status.get("checkedAt"),
+                "operating_date": status.get("operatingDate"),
+                "trip_id": status.get("tripId"),
+                "planned_departure": status.get("plannedDeparture"),
+                "planned_platform": status.get("plannedPlatform"),
+                "change_station": status.get("changeStation"),
+                "change_details": status.get("changeDetails", []),
+                "urgency": status.get("urgency"),
+                "preceding_affected_departures": status.get(
+                    "precedingAffectedDepartures", 0
+                ),
+                "historical_context": connection.get("historicalContext"),
+                "history": connection.get("history", []),
+                "observations": connection.get("observations", []),
+            }
+        )
+        return attributes
 
     @property
     def _current_connection(self) -> dict[str, Any]:

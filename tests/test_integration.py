@@ -379,6 +379,18 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
+    def test_one_time_connection_name_includes_departure_and_service_date(self):
+        name = sensor_module._connection_name(
+            {
+                "origin": "C",
+                "destination": "D",
+                "departureTime": "09:15",
+                "connectionType": "one_time",
+                "serviceDate": "2026-10-15",
+            }
+        )
+        self.assertEqual(name, "C → D · 09:15 · 2026-10-15")
+
     async def test_entry_migration_replaces_cookie_and_sets_interval(self):
         saved = {}
         entry = types.SimpleNamespace(
@@ -430,8 +442,22 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
             "origin": "A",
             "destination": "B",
             "departureTime": "08:00",
-            "weekdays": [1],
-            "status": {"status": "delayed", "train": "RE1", "delayMinutes": 5},
+            "arrivalTimesByWeekday": {"1": "09:05"},
+            "weekdays": [1, 3],
+            "connectionType": "weekly",
+            "groupPosition": 2,
+            "transferFromPrevious": "Umstieg Gleis 4",
+            "status": {
+                "status": "delayed",
+                "message": "Gleisänderung",
+                "train": "RE1",
+                "delayMinutes": 5,
+                "checkedAt": "2026-10-14T08:00:00+02:00",
+                "tripId": "trip-1",
+                "plannedPlatform": "3",
+                "changeDetails": ["Gleis 3 statt 2"],
+                "urgency": "elevated",
+            },
             "history": [],
             "observations": [],
         }
@@ -448,7 +474,14 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added[1].native_value, "RE1")
         self.assertTrue(entity.available)
         self.assertEqual(entity.extra_state_attributes["origin"], "A")
+        self.assertEqual(entity.extra_state_attributes["arrival_times_by_weekday"], {"1": "09:05"})
+        self.assertEqual(entity.extra_state_attributes["status_message"], "Gleisänderung")
+        self.assertEqual(entity.extra_state_attributes["planned_platform"], "3")
+        self.assertEqual(entity.extra_state_attributes["transfer_from_previous"], "Umstieg Gleis 4")
+        self.assertEqual(entity.extra_state_attributes["route"], "A → B · 08:00 · Mo, Mi · Abschnitt 2")
         self.assertEqual(entity._attr_device_info["manufacturer"], "TrainTrack")
+        self.assertIn("08:00", entity._attr_device_info["name"])
+        self.assertIn("Mo, Mi", entity._attr_device_info["name"])
         coordinator.listeners[0]()
         self.assertEqual(len(added), 3)
         coordinator.data = []
