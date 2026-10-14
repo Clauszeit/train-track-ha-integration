@@ -133,9 +133,6 @@ class _FakeEntityRegistry:
         self.updates = []
         self.removals = []
 
-    def async_entries_for_config_entry(self, entry_id):
-        return [item for item in self.entries if item.config_entry_id == entry_id]
-
     def async_update_entity(self, entity_id, **kwargs):
         self.updates.append((entity_id, kwargs))
 
@@ -240,6 +237,9 @@ def _install_home_assistant_stubs():
     _module(
         "homeassistant.helpers.entity_registry",
         async_get=lambda hass: hass.entity_registry,
+        async_entries_for_config_entry=lambda registry, entry_id: [
+            item for item in registry.entries if item.config_entry_id == entry_id
+        ],
     )
     _module(
         "homeassistant.helpers.entity_platform",

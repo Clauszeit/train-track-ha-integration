@@ -183,7 +183,7 @@ def _refresh_registered_entity_ids(
         return
 
     registry = er.async_get(hass)
-    for entity in registry.async_entries_for_config_entry(entry.entry_id):
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
         if not entity.unique_id.startswith(f"{entry.unique_id}_{connection.get('id')}_"):
             continue
         if not entity.entity_id.startswith(f"{legacy_prefix}_") and entity.entity_id != legacy_prefix:
@@ -229,7 +229,9 @@ async def _async_remove_expired_connections(
         unique_id_prefix = f"{entry.unique_id}_{connection_id}_"
         registered_entities = [
             entity
-            for entity in entity_registry.async_entries_for_config_entry(entry.entry_id)
+            for entity in er.async_entries_for_config_entry(
+                entity_registry, entry.entry_id
+            )
             if entity.unique_id.startswith(unique_id_prefix)
         ]
         for entity in registered_entities:
