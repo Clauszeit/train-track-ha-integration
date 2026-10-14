@@ -31,15 +31,40 @@ jobs:
         uses: home-assistant/actions/hassfest@master
 
   sonar:
-    name: SonarQube analysis
-    if: github.event_name != 'pull_request'
+    name: SonarQube Quality Gate
+    needs: [hacs, hassfest]
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - name: Require HACS and Home Assistant validation
+        shell: bash
+        env:
+          HACS_RESULT: ${{ needs.hacs.result }}
+          HASSFEST_RESULT: ${{ needs.hassfest.result }}
+        run: |
+          failed=false
+
+          if [[ "$HACS_RESULT" != "success" ]]; then
+            echo "::error title=HACS validation failed::The HACS validation job finished with '$HACS_RESULT'. Review its job log."
+            failed=true
+          fi
+
+          if [[ "$HASSFEST_RESULT" != "success" ]]; then
+            echo "::error title=Home Assistant validation failed::The hassfest job finished with '$HASSFEST_RESULT'. Review its job log."
+            failed=true
+          fi
+
+          [[ "$failed" == "false" ]]
+      - name: Skip Sonar analysis on pull requests
+        if: github.event_name == 'pull_request'
+        run: echo "SonarQube analysis is skipped for pull requests; HACS and hassfest results remain required by this gate."
       - name: Check out repository
+        if: github.event_name != 'pull_request'
         uses: actions/checkout@v4
       - name: Check SonarQube secrets
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -50,10 +75,12 @@ jobs:
             exit 1
           fi
       - name: Read project version
+        if: github.event_name != 'pull_request'
         id: project-version
         shell: bash
         run: echo "value=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_OUTPUT"
       - name: Analyze with SonarQube Community
+        if: github.event_name != 'pull_request'
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
