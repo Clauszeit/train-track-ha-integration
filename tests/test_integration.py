@@ -104,6 +104,24 @@ class _DeviceInfo(dict):
     pass
 
 
+class _FakeDeviceRegistry:
+    def __init__(self, devices=None):
+        self.devices = devices or {}
+        self.updates = []
+
+    def async_get_device_by_identifier(self, identifier, entry_id):
+        return self.devices.get((identifier, entry_id))
+
+    def async_update_device(self, device_id, **kwargs):
+        self.updates.append((device_id, kwargs))
+        for device in self.devices.values():
+            if device.id == device_id:
+                for key, value in kwargs.items():
+                    setattr(device, key, value)
+                return device
+        raise AssertionError(f"Unknown device id: {device_id}")
+
+
 class _Selector:
     def __init__(self, config=None):
         self.config = config
@@ -192,7 +210,11 @@ def _install_home_assistant_stubs():
         TextSelectorConfig=_TextSelectorConfig,
         TextSelectorType=types.SimpleNamespace(PASSWORD="password"),
     )
-    _module("homeassistant.helpers.device_registry", DeviceInfo=_DeviceInfo)
+    _module(
+        "homeassistant.helpers.device_registry",
+        DeviceInfo=_DeviceInfo,
+        async_get=lambda hass: hass.device_registry,
+    )
     _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object)
     _module(
         "homeassistant.helpers.update_coordinator",
@@ -465,9 +487,23 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator.data = [route]
         added = []
         entry = types.SimpleNamespace(entry_id="entry", unique_id="owner", async_on_unload=lambda _: None)
-        hass = types.SimpleNamespace(data={"traintrack": {"entry": coordinator}})
+        device = types.SimpleNamespace(
+            id="registered-device",
+            name="A → B",
+            name_by_user=None,
+        )
+        registry = _FakeDeviceRegistry({(("traintrack", "owner_connection"), "entry"): device})
+        hass = types.SimpleNamespace(
+            data={"traintrack": {"entry": coordinator}},
+            device_registry=registry,
+        )
         await sensor_module.async_setup_entry(hass, entry, added.extend)
         self.assertEqual(len(added), 3)
+        self.assertEqual(device.name, "A → B · 08:00 · Mo, Mi · Abschnitt 2")
+        self.assertEqual(
+            registry.updates,
+            [("registered-device", {"name": "A → B · 08:00 · Mo, Mi · Abschnitt 2"})],
+        )
         entity = added[2]
         self.assertEqual(entity.native_value, 5)
         self.assertEqual(added[0].native_value, "delayed")
@@ -491,6 +527,25 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added[0].native_value, "waiting")
         self.assertIsNone(added[1].native_value)
         self.assertIsNone(added[2].native_value)
+
+    def test_registered_device_name_refresh_preserves_user_name(self):
+        device = types.SimpleNamespace(
+            id="registered-device",
+            name="My Train",
+            name_by_user="My Train",
+        )
+        registry = _FakeDeviceRegistry({(("traintrack", "owner_connection"), "entry"): device})
+        hass = types.SimpleNamespace(device_registry=registry)
+        entry = types.SimpleNamespace(entry_id="entry", unique_id="owner")
+
+        sensor_module._refresh_registered_device_name(
+            hass,
+            entry,
+            {"id": "connection", "origin": "A", "destination": "B", "departureTime": "08:00"},
+        )
+
+        self.assertEqual(device.name, "My Train")
+        self.assertEqual(registry.updates, [])
 
 
 if __name__ == "__main__":

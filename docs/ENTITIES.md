@@ -10,6 +10,8 @@ Home Assistant erhält für das Gerät einen stabilen Bezeichner aus der TrainTr
 
 Neue Verbindungen werden beim nächsten erfolgreichen Abruf als Geräte und Sensoren ergänzt. Verbindungen, die in einer erfolgreichen API-Antwort nicht mehr enthalten sind, machen die dazugehörigen Entities nicht verfügbar. Die Integration entfernt bereits registrierte Entities nicht aktiv aus dem Home-Assistant-Entity-Register. Bei einem fehlgeschlagenen Abruf sind alle Verbindungs-Entities nicht verfügbar. Ein ungültiger oder widerrufener API-Schlüssel führt in den Wiederherstellungs-/Reauthentifizierungsablauf.
 
+Bei jedem erfolgreichen Abruf gleicht die Integration den automatisch vergebenen Gerätenamen mit dem aktuellen Fahrplan-Namensschema ab. Das aktualisiert auch bereits vorhandene Registry-Einträge. Einen in Home Assistant manuell gesetzten Gerätenamen (`name_by_user`) lässt die Integration unverändert. Die drei Sensorarten selbst bleiben `Status`, `Train` und `Delay`; zusätzliche Fahrplaninformationen stehen als gemeinsame Attribute dieser Sensoren zur Verfügung.
+
 ## Namensschema
 
 Der Gerätename wird aus den Verbindungsfeldern in folgender Reihenfolge gebildet:

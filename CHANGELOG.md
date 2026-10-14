@@ -4,7 +4,12 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
-- Add a complete reference for Home Assistant devices, sensors, names, states, attributes, histories, and availability.
+- Refresh automatically managed Home Assistant device names in the registry and preserve names set by users.
+
+## 0.4.3-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Refresh automatically managed Home Assistant device names in the registry and preserve names set by users.
 
 ## 0.4.2-dev.1 (Development)
 

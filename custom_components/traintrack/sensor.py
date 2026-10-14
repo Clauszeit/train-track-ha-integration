@@ -6,6 +6,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -81,7 +82,10 @@ async def async_setup_entry(  # NOSONAR(S7503)
         entities: list[TrainTrackConnectionSensor] = []
         for connection in coordinator.data or []:
             connection_id = str(connection.get("id", ""))
-            if not connection_id or connection_id in known_connection_ids:
+            if not connection_id:
+                continue
+            _refresh_registered_device_name(hass, entry, connection)
+            if connection_id in known_connection_ids:
                 continue
             known_connection_ids.add(connection_id)
             entities.extend(
@@ -93,6 +97,25 @@ async def async_setup_entry(  # NOSONAR(S7503)
 
     add_new_connections()
     entry.async_on_unload(coordinator.async_add_listener(add_new_connections))
+
+
+def _refresh_registered_device_name(
+    hass: HomeAssistant, entry: Any, connection: dict[str, Any]
+) -> None:
+    """Update old registry names while preserving names chosen by the user."""
+    connection_id = str(connection.get("id", ""))
+    if not connection_id:
+        return
+
+    identifier = f"{entry.unique_id}_{connection_id}"
+    registry = dr.async_get(hass)
+    device = registry.async_get_device_by_identifier((DOMAIN, identifier), entry.entry_id)
+    if device is None or device.name_by_user is not None:
+        return
+
+    name = _connection_name(connection)
+    if device.name != name:
+        registry.async_update_device(device.id, name=name)
 
 
 class TrainTrackConnectionSensor(CoordinatorEntity[TrainTrackCoordinator], SensorEntity):
