@@ -8,7 +8,7 @@ The integration polls the authenticated user's monitored connections and creates
 - **Zug** with the matched train identifier
 - **Verspätung** with the reported delay in minutes
 
-Each connection device and its sensor names include the scheduled departure time; recurring services also show weekdays, one-time services show their date, and grouped legs show their position. Sensors expose the full API connection data plus readable attributes for scheduled arrival times, connection type, transfer details, current monitor message and state, train, delay, operating date, trip, platform, change details, urgency, historical context, observations, and history. New connections appear after the next poll. API outages mark entities unavailable; a revoked API key opens Home Assistant's reauthentication flow.
+Each connection device includes the scheduled departure time in its name; recurring services also show weekdays, one-time services show their date, and grouped legs show their position. On the device page, the three sensors are labeled Status, Train, and Delay (Status, Zug, and Verspätung in German). Sensors expose the full API connection data plus readable attributes for scheduled arrival times, connection type, transfer details, current monitor message and state, train, delay, operating date, trip, platform, change details, urgency, historical context, observations, and history. New connections appear after the next poll. API outages mark entities unavailable; a revoked API key opens Home Assistant's reauthentication flow.
 
 The complete device and entity reference documents the naming rules, sensor states, every API and normalized attribute, history structures, optional values, and availability behavior: [Devices and entities](docs/ENTITIES.md).
 
@@ -27,6 +27,8 @@ This integration is read-only. It does not create, update, delete, or select Tra
 In HACS, open the menu, choose **Custom repositories**, add `https://github.com/Clauszeit/train-track-ha-integration` as an **Integration**, then install **TrainTrack**. The repository must be public for HACS to access it.
 
 Until an explicit release is requested, HACS uses the default branch. Normal pushes are development versions; published GitHub releases are reserved for explicitly requested releases.
+
+After installing an update, restart Home Assistant so it loads the updated integration and sensor translations. Existing manually assigned entity names remain under your control.
 
 The integration is distributed as a **custom HACS repository** and is not currently listed in the HACS default catalog. The validation workflow checks changes but does not create packages, GitHub releases, or version bumps. See [Publishing and updates](docs/PUBLISHING.md) for the exact development and release process.
 

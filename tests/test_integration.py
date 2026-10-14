@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import sys
 import types
 import unittest
@@ -277,6 +278,27 @@ config_flow = importlib.import_module("custom_components.traintrack.config_flow"
 coordinator_module = importlib.import_module("custom_components.traintrack.coordinator")
 integration = importlib.import_module("custom_components.traintrack")
 sensor_module = importlib.import_module("custom_components.traintrack.sensor")
+
+
+class TranslationTests(unittest.TestCase):
+    def test_custom_integration_translations_name_every_sensor(self):
+        translations = Path(__file__).resolve().parents[1] / "custom_components/traintrack/translations"
+        expected_names = {
+            "en": {"status": "Status", "train": "Train", "delay": "Delay"},
+            "de": {"status": "Status", "train": "Zug", "delay": "Verspätung"},
+        }
+        self.assertFalse((translations.parent / "strings.json").exists())
+        for language, names in expected_names.items():
+            with self.subTest(language=language):
+                content = json.loads((translations / f"{language}.json").read_text(encoding="utf-8"))
+                sensor_names = content["entity"]["sensor"]
+                self.assertEqual(
+                    {description.translation_key: sensor_names[description.translation_key]["name"]
+                     for description in sensor_module.SENSORS},
+                    names,
+                )
+                self.assertTrue(content["config"]["step"]["user"]["data"]["api_key"])
+                self.assertTrue(content["options"]["step"]["init"]["data"]["scan_interval"])
 
 
 class ApiTests(unittest.IsolatedAsyncioTestCase):

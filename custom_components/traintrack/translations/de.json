@@ -1,0 +1,64 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mit TrainTrack verbinden",
+        "description": "Gib die URL deiner TrainTrack-Instanz und den API-Schlüssel ein. Das Abrufintervall kann später in den Integrationseinstellungen geändert werden.",
+        "data": {
+          "base_url": "TrainTrack-URL",
+          "api_key": "API-Schlüssel",
+          "scan_interval": "Abrufintervall in Sekunden"
+        }
+      },
+      "reconfigure": {
+        "title": "TrainTrack-Verbindung aktualisieren",
+        "description": "Aktualisiere die Instanz-URL oder ersetze den API-Schlüssel.",
+        "data": {
+          "base_url": "TrainTrack-URL",
+          "api_key": "API-Schlüssel"
+        }
+      },
+      "reauth_confirm": {
+        "title": "TrainTrack-API-Schlüssel ersetzen",
+        "description": "Der API-Schlüssel ist ungültig oder wurde widerrufen. Gib einen neuen Schlüssel ein.",
+        "data": {
+          "base_url": "TrainTrack-URL",
+          "api_key": "API-Schlüssel"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zu TrainTrack fehlgeschlagen. Prüfe die URL und versuche es erneut.",
+      "invalid_auth": "TrainTrack hat diesen API-Schlüssel abgelehnt.",
+      "invalid_url": "Verwende eine gültige HTTP- oder HTTPS-URL ohne Zugangsdaten, Abfrageparameter oder Fragment."
+    },
+    "abort": {
+      "reauth_entry_not_found": "Der TrainTrack-Konfigurationseintrag wurde nicht gefunden."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Abrufintervall und Aufbewahrung von Einzelfahrten",
+        "description": "Lege fest, wie oft Verbindungen abgerufen werden und wie lange abgeschlossene Einzelfahrten in Home Assistant bleiben.",
+        "data": {
+          "scan_interval": "Abrufintervall in Sekunden",
+          "one_time_retention_days": "Abgeschlossene Einzelfahrten aufbewahren (Tage)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status"
+      },
+      "train": {
+        "name": "Zug"
+      },
+      "delay": {
+        "name": "Verspätung"
+      }
+    }
+  }
+}

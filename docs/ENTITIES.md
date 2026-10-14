@@ -24,15 +24,15 @@ Der Gerätename wird aus den Verbindungsfeldern in folgender Reihenfolge gebilde
 
 Fehlt der Startbahnhof, wird `Unbekannter Start` verwendet; fehlt der Zielbahnhof, `Unbekanntes Ziel`. Ein fehlender Zeitwert, ein fehlendes Datum oder eine fehlende Wochentagsauswahl wird nicht durch einen Platzhalter ersetzt.
 
-Die Sensoren verwenden Home Assistants Entity-Namensschema (`has_entity_name`). Daher setzt sich der sichtbare Sensorname aus dem Gerätenamen und dem übersetzten Sensornamen zusammen. Die mitgelieferte Übersetzungsdatei benennt die Sensoren derzeit **Status**, **Train** und **Delay**. Die Übersetzungen werden von Home Assistant entsprechend der eingestellten Sprache verwendet. Die Spracheinstellung ändert nicht die Sensor-Schlüssel oder ihre Funktion.
+Die Sensoren verwenden Home Assistants Entity-Namensschema (`has_entity_name`). In der Gerätekarte zeigt Home Assistant den jeweiligen Sensornamen, sodass **Status**, **Zug** und **Verspätung** unmittelbar unterscheidbar sind. Die Laufzeitübersetzungen liegen in `translations/en.json` und `translations/de.json`; bei englischer Systemsprache heißen die Sensoren **Status**, **Train** und **Delay**. Der vollständige `friendly_name` kombiniert Gerätename und Sensorname. Für die anfängliche Namensvergabe ist die Home-Assistant-Backend-Sprache maßgeblich; bereits vergebene eigene Namen werden durch einen Sprachwechsel nicht geändert. Die Spracheinstellung ändert weder die Sensor-Schlüssel noch ihre Funktion.
 
 ## Sensoren und Zustände
 
 | Entity-Schlüssel | Anzeigename (mitgelieferte Übersetzung) | Wert und Quelle | Einheit |
 |---|---|---|---|
 | `status` | Status | `status.status`; wenn das Feld im Monitorobjekt fehlt, `waiting` | keine |
-| `train` | Train | `status.train`; leerer oder fehlender Wert wird als unbekannter Sensorwert (`None`) dargestellt | keine |
-| `delay` | Delay | `status.delayMinutes`; wird nur als numerischer Wert ausgegeben, sonst unbekannter Sensorwert (`None`) | `min` |
+| `train` | Zug (Englisch: Train) | `status.train`; leerer oder fehlender Wert wird als unbekannter Sensorwert (`None`) dargestellt | keine |
+| `delay` | Verspätung (Englisch: Delay) | `status.delayMinutes`; wird nur als numerischer Wert ausgegeben, sonst unbekannter Sensorwert (`None`) | `min` |
 
 `Status` ist ein Monitorzustand und kein Zugstatus im Sinne einer Garantie, dass der Zug fährt oder pünktlich ist. Die API kann unter anderem die folgenden Codes liefern:
 
