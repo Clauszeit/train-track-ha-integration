@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to TrainTrack",
+        "description": "Enter your TrainTrack instance URL and API key. The polling interval can be changed later in the integration options.",
+        "data": {
+          "base_url": "TrainTrack URL",
+          "api_key": "API key",
+          "scan_interval": "Polling interval in seconds"
+        }
+      },
+      "reconfigure": {
+        "title": "Update TrainTrack connection",
+        "description": "Update the instance URL or replace the API key.",
+        "data": {
+          "base_url": "TrainTrack URL",
+          "api_key": "API key"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Replace TrainTrack API key",
+        "description": "The API key is invalid or revoked. Enter a replacement key.",
+        "data": {
+          "base_url": "TrainTrack URL",
+          "api_key": "API key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to TrainTrack. Check the URL and try again.",
+      "invalid_auth": "TrainTrack rejected this API key.",
+      "invalid_url": "Use an HTTPS URL. HTTP is allowed only for localhost."
+    },
+    "abort": {
+      "reauth_entry_not_found": "The TrainTrack configuration entry could not be found."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling interval",
+        "description": "Choose how often Home Assistant retrieves your TrainTrack connections (30 to 3600 seconds).",
+        "data": {
+          "scan_interval": "Polling interval in seconds"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status"
+      },
+      "train": {
+        "name": "Train"
+      },
+      "delay": {
+        "name": "Delay"
+      }
+    }
+  }
+}

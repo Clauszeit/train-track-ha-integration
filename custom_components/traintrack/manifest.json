@@ -2,11 +2,11 @@
   "domain": "traintrack",
   "name": "TrainTrack",
   "codeowners": ["@Clauszeit"],
-  "config_flow": false,
+  "config_flow": true,
   "documentation": "https://github.com/Clauszeit/train-track-ha-integration",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Clauszeit/train-track-ha-integration/issues",
   "requirements": [],
-  "version": "0.2.3-dev.1"
+  "version": "0.3.0-dev.1"
 }

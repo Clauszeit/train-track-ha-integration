@@ -4,6 +4,13 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+
+## 0.3.0-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Use revocable read-only TrainTrack API keys instead of browser SSO cookies and make the connection polling interval configurable in Home Assistant.
+- Implement the Home Assistant config flow, authenticated TrainTrack API polling, and per-connection status, train, and delay sensors with route and history attributes.
+
 ## 0.2.4-dev.1 (Development)
 
 - Prepare the development push and carry forward all accumulated unreleased changes.
