@@ -4,6 +4,8 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+- Aktualisiert Checkout auf v7.0.1 und SonarQube Scan Action auf v8.3.0; HACS Action 22.5.0 ist bereits aktuell. Hassfest folgt der offiziellen `@master`-Referenz, da keine versionierten Releases angeboten werden.
+
 ## 0.2.3-dev.1 (Development)
 
 - Prepare the development push and carry forward all accumulated unreleased changes.
