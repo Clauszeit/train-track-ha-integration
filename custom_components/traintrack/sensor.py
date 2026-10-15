@@ -76,79 +76,105 @@ def _alternative_statuses(
     main_status = connection.get("status")
     if not isinstance(main_status, dict):
         main_status = {}
-
     for relation in alternatives:
-        if not isinstance(relation, dict):
+        result = _alternative_relation_status(connection, relation, connections_by_id, main_status)
+        if result is None:
             continue
-        alternative_id = relation.get("connectionId")
-        if alternative_id is None:
-            continue
-        alternative = connections_by_id.get(str(alternative_id), {})
-        alternative_status = alternative.get("status")
-        if not isinstance(alternative_status, dict):
-            alternative_status = {}
-
-        summary: dict[str, Any] = {
-            "connection_id": str(alternative_id),
-            "origin": alternative.get("origin"),
-            "destination": alternative.get("destination"),
-            "departure_time": alternative.get("departureTime"),
-            "main_delay_threshold": relation.get("mainDelayThreshold"),
-            "alternative_delay_threshold": relation.get("alternativeDelayThreshold"),
-            "status_code": alternative_status.get("status"),
-            "status_message": alternative_status.get("message"),
-            "delay_minutes": _numeric_delay(alternative_status.get("delayMinutes")),
-            "operating_date": alternative_status.get("operatingDate"),
-        }
-
-        main_delay = _numeric_delay(main_status.get("delayMinutes"))
-        alternative_delay = summary["delay_minutes"]
-        same_active_day = (
-            main_status.get("status") in ACTIVE_MONITOR_STATUSES
-            and alternative_status.get("status") in ACTIVE_MONITOR_STATUSES
-            and isinstance(main_status.get("operatingDate"), str)
-            and main_status.get("operatingDate") == alternative_status.get("operatingDate")
-        )
-        alert_types: list[str] = []
-        if same_active_day and alternative_delay is not None:
-            main_threshold = _numeric_delay(relation.get("mainDelayThreshold"))
-            alternative_threshold = _numeric_delay(relation.get("alternativeDelayThreshold"))
-            if (
-                main_delay is not None
-                and main_threshold is not None
-                and alternative_delay <= 0
-                and main_delay > main_threshold
-            ):
-                alert_types.append("switch_to_alternative")
-            if (
-                alternative_threshold is not None
-                and _is_earlier_departure(
-                    alternative.get("departureTime"), connection.get("departureTime")
-                )
-                and alternative_delay > alternative_threshold
-            ):
-                alert_types.append("earlier_alternative_delayed")
-
-        summary["alert_types"] = alert_types
-        summary["evaluation"] = (
-            "active"
-            if same_active_day and alternative_delay is not None
-            else "unknown"
-        )
+        summary, pair_recommendations = result
         summaries.append(summary)
-        for alert_type in alert_types:
-            recommendations.append({
-                "type": alert_type,
-                "connection_id": str(alternative_id),
-                "origin": summary["origin"],
-                "destination": summary["destination"],
-                "departure_time": summary["departure_time"],
-                "main_delay_minutes": main_delay,
-                "alternative_delay_minutes": alternative_delay,
-                "main_delay_threshold": summary["main_delay_threshold"],
-                "alternative_delay_threshold": summary["alternative_delay_threshold"],
-            })
+        recommendations.extend(pair_recommendations)
     return summaries, recommendations
+
+
+def _alternative_relation_status(
+    connection: dict[str, Any],
+    relation: Any,
+    connections_by_id: dict[str, dict[str, Any]],
+    main_status: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    if not isinstance(relation, dict) or relation.get("connectionId") is None:
+        return None
+    alternative_id = relation["connectionId"]
+    alternative = connections_by_id.get(str(alternative_id), {})
+    alternative_status = alternative.get("status")
+    if not isinstance(alternative_status, dict):
+        alternative_status = {}
+    summary = _alternative_summary(alternative_id, relation, alternative, alternative_status)
+    main_delay = _numeric_delay(main_status.get("delayMinutes"))
+    alternative_delay = summary["delay_minutes"]
+    alert_types, same_active_day = _alternative_alert_types(
+        connection, relation, alternative, main_status, alternative_status,
+        main_delay, alternative_delay,
+    )
+    summary["alert_types"] = alert_types
+    summary["evaluation"] = "active" if same_active_day and alternative_delay is not None else "unknown"
+    recommendations = [
+        _alternative_recommendation(alert_type, summary, main_delay, alternative_delay)
+        for alert_type in alert_types
+    ]
+    return summary, recommendations
+
+
+def _alternative_summary(
+    alternative_id: Any,
+    relation: dict[str, Any],
+    alternative: dict[str, Any],
+    status: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "connection_id": str(alternative_id),
+        "origin": alternative.get("origin"),
+        "destination": alternative.get("destination"),
+        "departure_time": alternative.get("departureTime"),
+        "main_delay_threshold": relation.get("mainDelayThreshold"),
+        "alternative_delay_threshold": relation.get("alternativeDelayThreshold"),
+        "status_code": status.get("status"),
+        "status_message": status.get("message"),
+        "delay_minutes": _numeric_delay(status.get("delayMinutes")),
+        "operating_date": status.get("operatingDate"),
+    }
+
+
+def _alternative_alert_types(
+    connection: dict[str, Any], relation: dict[str, Any], alternative: dict[str, Any],
+    main_status: dict[str, Any], alternative_status: dict[str, Any],
+    main_delay: int | float | None, alternative_delay: int | float | None,
+) -> tuple[list[str], bool]:
+    same_active_day = (
+        main_status.get("status") in ACTIVE_MONITOR_STATUSES
+        and alternative_status.get("status") in ACTIVE_MONITOR_STATUSES
+        and isinstance(main_status.get("operatingDate"), str)
+        and main_status.get("operatingDate") == alternative_status.get("operatingDate")
+    )
+    if not same_active_day or alternative_delay is None:
+        return [], same_active_day
+    alerts = []
+    main_threshold = _numeric_delay(relation.get("mainDelayThreshold"))
+    alternative_threshold = _numeric_delay(relation.get("alternativeDelayThreshold"))
+    if main_delay is not None and main_threshold is not None and alternative_delay <= 0 and main_delay > main_threshold:
+        alerts.append("switch_to_alternative")
+    if alternative_threshold is not None and _is_earlier_departure(
+        alternative.get("departureTime"), connection.get("departureTime")
+    ) and alternative_delay > alternative_threshold:
+        alerts.append("earlier_alternative_delayed")
+    return alerts, same_active_day
+
+
+def _alternative_recommendation(
+    alert_type: str, summary: dict[str, Any], main_delay: int | float | None,
+    alternative_delay: int | float | None,
+) -> dict[str, Any]:
+    return {
+        "type": alert_type,
+        "connection_id": summary["connection_id"],
+        "origin": summary["origin"],
+        "destination": summary["destination"],
+        "departure_time": summary["departure_time"],
+        "main_delay_minutes": main_delay,
+        "alternative_delay_minutes": alternative_delay,
+        "main_delay_threshold": summary["main_delay_threshold"],
+        "alternative_delay_threshold": summary["alternative_delay_threshold"],
+    }
 
 
 def _numeric_delay(value: Any) -> int | float | None:
