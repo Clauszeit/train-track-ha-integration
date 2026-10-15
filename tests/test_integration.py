@@ -801,7 +801,7 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
 
         self.assertEqual(summaries[0]["evaluation"], "unknown")
-        self.assertEqual(summaries[0]["delay_minutes"], None)
+        self.assertIsNone(summaries[0]["delay_minutes"])
         self.assertEqual(recommendations, [])
 
         early["status"]["delayMinutes"] = 4
@@ -809,6 +809,34 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
         self.assertEqual(summaries[0]["evaluation"], "unknown")
         self.assertEqual(recommendations, [])
+
+        main["alternatives"][0].pop("delayThreshold")
+        early["status"]["operatingDate"] = "2026-10-15"
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        self.assertEqual(summaries[0]["evaluation"], "active")
+        self.assertIsNone(summaries[0]["delay_threshold"])
+        self.assertEqual(recommendations, [])
+
+    def test_alternative_mode_and_threshold_support_legacy_settings(self):
+        main = {"departureTime": "16:10"}
+        earlier = {"departureTime": "16:03"}
+        later = {"departureTime": "16:20"}
+
+        earlier_mode = sensor_module._alternative_mode(main, {}, earlier)
+        earlier_threshold = sensor_module._alternative_threshold(
+            {"alternativeDelayThreshold": 7, "mainDelayThreshold": 12}, earlier_mode
+        )
+        later_mode = sensor_module._alternative_mode(
+            main, {"mode": "invalid"}, later
+        )
+        later_threshold = sensor_module._alternative_threshold(
+            {"mainDelayThreshold": 9, "alternativeDelayThreshold": 15}, later_mode
+        )
+
+        self.assertEqual(earlier_mode, "earlier")
+        self.assertEqual(earlier_threshold, 7)
+        self.assertEqual(later_mode, "switch")
+        self.assertEqual(later_threshold, 9)
 
     def test_registered_device_name_refresh_preserves_user_name(self):
         device = types.SimpleNamespace(

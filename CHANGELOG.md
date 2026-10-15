@@ -4,6 +4,10 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.7.1-dev.1 (Development)
+
+- Ergänzt Abdeckung für die neuen Alternativmodi und die Rückwärtskompatibilität älterer Einstellungen.
+
 ## 0.7.0-dev.1 (Development)
 
 - Expose the selected alternative mode and its single applicable delay threshold instead of two simultaneous thresholds.
