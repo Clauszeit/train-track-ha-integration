@@ -4,11 +4,14 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
-- Behebt den neuen SonarQube-Befund zur Komplexität der Auswertung alternativer Verbindungen.
-
 ## 0.6.0-dev.1 (Development)
 
 - Expose linked alternative connections, both delay thresholds, and current switch/earlier-connection recommendations on connection sensor attributes.
+
+## 0.6.1-dev.1 (Development)
+
+- Prepare the development push and carry forward all accumulated unreleased changes.
+- Behebt den neuen SonarQube-Befund zur Komplexität der Auswertung alternativer Verbindungen.
 
 ## 0.5.5-dev.1 (Development)
 
