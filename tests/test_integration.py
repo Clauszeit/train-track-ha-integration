@@ -709,17 +709,16 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(added[1].native_value)
         self.assertIsNone(added[2].native_value)
 
-    def test_alternative_recommendations_cover_both_threshold_directions(self):
+    def test_alternative_recommendations_use_one_threshold_per_mode(self):
         main = {
             "id": "main",
             "origin": "Arbeit",
             "destination": "Bahnhof",
             "departureTime": "16:10",
-            "alternatives": [{
-                "connectionId": "early",
-                "mainDelayThreshold": 5,
-                "alternativeDelayThreshold": 3,
-            }],
+            "alternatives": [
+                {"connectionId": "early", "mode": "earlier", "delayThreshold": 3},
+                {"connectionId": "later", "mode": "switch", "delayThreshold": 5},
+            ],
             "status": {
                 "status": "changed",
                 "delayMinutes": 6,
@@ -737,14 +736,30 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
                 "operatingDate": "2026-10-15",
             },
         }
+        later = {
+            "id": "later",
+            "origin": "Arbeit",
+            "destination": "Bahnhof",
+            "departureTime": "16:20",
+            "status": {
+                "status": "matched",
+                "delayMinutes": 0,
+                "operatingDate": "2026-10-15",
+            },
+        }
 
-        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early, later])
 
         self.assertEqual(summaries[0]["evaluation"], "active")
         self.assertEqual(summaries[0]["alert_types"], ["earlier_alternative_delayed"])
+        self.assertEqual(summaries[0]["mode"], "earlier")
+        self.assertEqual(summaries[0]["delay_threshold"], 3)
         self.assertEqual(recommendations[0]["type"], "earlier_alternative_delayed")
+        self.assertEqual(recommendations[1]["type"], "switch_to_alternative")
+        self.assertNotIn("main_delay_threshold", summaries[0])
+        self.assertNotIn("alternative_delay_threshold", summaries[0])
         coordinator = _DataUpdateCoordinator(None)
-        coordinator.data = [main, early]
+        coordinator.data = [main, early, later]
         entity = sensor_module.TrainTrackConnectionSensor(
             coordinator,
             types.SimpleNamespace(unique_id="owner"),
@@ -757,13 +772,13 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         )
 
         main["status"].pop("delayMinutes")
-        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early, later])
         self.assertEqual(summaries[0]["evaluation"], "active")
         self.assertEqual(recommendations[0]["type"], "earlier_alternative_delayed")
 
         main["status"]["delayMinutes"] = 6
         early["status"]["delayMinutes"] = 0
-        _, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        _, recommendations = sensor_module._alternative_statuses(main, [main, early, later])
         self.assertEqual(recommendations[0]["type"], "switch_to_alternative")
 
     def test_alternative_recommendations_require_explicit_same_day_delay_data(self):
@@ -772,8 +787,8 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
             "departureTime": "16:10",
             "alternatives": [{
                 "connectionId": "early",
-                "mainDelayThreshold": 5,
-                "alternativeDelayThreshold": 3,
+                "mode": "earlier",
+                "delayThreshold": 3,
             }],
             "status": {"status": "changed", "operatingDate": "2026-10-15"},
         }
