@@ -4,6 +4,8 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+## 0.6.0-dev.1 (Development)
+
 - Expose linked alternative connections, both delay thresholds, and current switch/earlier-connection recommendations on connection sensor attributes.
 
 ## 0.5.5-dev.1 (Development)
