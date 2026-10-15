@@ -12,7 +12,7 @@ Each connection device includes the scheduled departure time in its name; recurr
 
 Sensor entity IDs start with `sensor.traintrack_status_`, `sensor.traintrack_train_`, or `sensor.traintrack_delay_` followed by a stable 16-character identifier. Older automatically generated route IDs, including repeated schedule fragments, are migrated on update. Update any dashboards, templates, or automations that refer to an old generated entity ID; manually renamed IDs are preserved.
 
-The complete device and entity reference documents the naming rules, sensor states, every API and normalized attribute, history structures, optional values, and availability behavior: [Devices and entities](docs/ENTITIES.md).
+The complete device and entity reference documents the naming rules, sensor states, every API and normalized attribute, alternative-connection evaluation, history structures, optional values, and availability behavior: [Devices and entities](docs/ENTITIES.md).
 
 ## Configure the integration
 
@@ -22,7 +22,7 @@ The complete device and entity reference documents the naming rules, sensor stat
 
 The API key is stored in the Home Assistant config entry and grants read-only access to your account's session identity and connections. TrainTrack stores only its hash. Both HTTP and HTTPS URLs are supported so the address can match your network. HTTPS protects the API key in transit; use HTTP only on a trusted, isolated network because it sends the key without TLS. You can change the polling interval later in Home Assistant's integration options (30–3600 seconds, in 30-second steps) and set how long completed one-time trips remain in Home Assistant (default: seven days; configurable from one to 365 days). If a key is revoked, Home Assistant asks for a replacement.
 
-This integration is read-only. It does not create, update, delete, or select TrainTrack connections.
+This integration is read-only. It does not create, update, delete, or select TrainTrack connections, and it does not configure alternative links. Configure alternatives and their X/Y thresholds in TrainTrack. Home Assistant then exposes the links, both threshold checks, and current recommendations as attributes on the existing connection sensors. A recommendation is evaluated only when both connections have an active matched status for the same operating date and TrainTrack supplies numeric delay values. TrainTrack derives delay from its planned departure and a reported changed departure time; a missing delay is unknown, not on time. See [Alternative connections](docs/ENTITIES.md#alternativverbindungen) for exact rules and automation examples.
 
 ## Install through HACS
 

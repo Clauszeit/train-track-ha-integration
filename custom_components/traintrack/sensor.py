@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from hashlib import blake2s
 from typing import Any
@@ -53,6 +54,133 @@ WEEKDAY_LABELS = {
     6: "Sa",
     7: "So",
 }
+
+ACTIVE_MONITOR_STATUSES = {"matched", "changed"}
+
+
+def _alternative_statuses(
+    connection: dict[str, Any], connections: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Describe linked alternatives and current threshold-based recommendations."""
+    alternatives = connection.get("alternatives")
+    if not isinstance(alternatives, list):
+        return [], []
+
+    connections_by_id = {
+        str(item["id"]): item
+        for item in connections
+        if item.get("id") is not None
+    }
+    summaries: list[dict[str, Any]] = []
+    recommendations: list[dict[str, Any]] = []
+    main_status = connection.get("status")
+    if not isinstance(main_status, dict):
+        main_status = {}
+
+    for relation in alternatives:
+        if not isinstance(relation, dict):
+            continue
+        alternative_id = relation.get("connectionId")
+        if alternative_id is None:
+            continue
+        alternative = connections_by_id.get(str(alternative_id), {})
+        alternative_status = alternative.get("status")
+        if not isinstance(alternative_status, dict):
+            alternative_status = {}
+
+        summary: dict[str, Any] = {
+            "connection_id": str(alternative_id),
+            "origin": alternative.get("origin"),
+            "destination": alternative.get("destination"),
+            "departure_time": alternative.get("departureTime"),
+            "main_delay_threshold": relation.get("mainDelayThreshold"),
+            "alternative_delay_threshold": relation.get("alternativeDelayThreshold"),
+            "status_code": alternative_status.get("status"),
+            "status_message": alternative_status.get("message"),
+            "delay_minutes": _numeric_delay(alternative_status.get("delayMinutes")),
+            "operating_date": alternative_status.get("operatingDate"),
+        }
+
+        main_delay = _numeric_delay(main_status.get("delayMinutes"))
+        alternative_delay = summary["delay_minutes"]
+        same_active_day = (
+            main_status.get("status") in ACTIVE_MONITOR_STATUSES
+            and alternative_status.get("status") in ACTIVE_MONITOR_STATUSES
+            and isinstance(main_status.get("operatingDate"), str)
+            and main_status.get("operatingDate") == alternative_status.get("operatingDate")
+        )
+        alert_types: list[str] = []
+        if same_active_day and alternative_delay is not None:
+            main_threshold = _numeric_delay(relation.get("mainDelayThreshold"))
+            alternative_threshold = _numeric_delay(relation.get("alternativeDelayThreshold"))
+            if (
+                main_delay is not None
+                and main_threshold is not None
+                and alternative_delay <= 0
+                and main_delay > main_threshold
+            ):
+                alert_types.append("switch_to_alternative")
+            if (
+                alternative_threshold is not None
+                and _is_earlier_departure(
+                    alternative.get("departureTime"), connection.get("departureTime")
+                )
+                and alternative_delay > alternative_threshold
+            ):
+                alert_types.append("earlier_alternative_delayed")
+
+        summary["alert_types"] = alert_types
+        summary["evaluation"] = (
+            "active"
+            if same_active_day and alternative_delay is not None
+            else "unknown"
+        )
+        summaries.append(summary)
+        for alert_type in alert_types:
+            recommendations.append({
+                "type": alert_type,
+                "connection_id": str(alternative_id),
+                "origin": summary["origin"],
+                "destination": summary["destination"],
+                "departure_time": summary["departure_time"],
+                "main_delay_minutes": main_delay,
+                "alternative_delay_minutes": alternative_delay,
+                "main_delay_threshold": summary["main_delay_threshold"],
+                "alternative_delay_threshold": summary["alternative_delay_threshold"],
+            })
+    return summaries, recommendations
+
+
+def _numeric_delay(value: Any) -> int | float | None:
+    """Accept numeric delay fields but reject booleans and non-finite values."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def _is_earlier_departure(alternative_time: Any, main_time: Any) -> bool:
+    """Compare validated HH:MM schedule values without relying on API order."""
+    if not isinstance(alternative_time, str) or not isinstance(main_time, str):
+        return False
+    try:
+        alternative_minutes = _minutes_after_midnight(alternative_time)
+        main_minutes = _minutes_after_midnight(main_time)
+        return alternative_minutes < main_minutes
+    except ValueError:
+        return False
+
+
+def _minutes_after_midnight(value: str) -> int:
+    """Parse a strict 24-hour HH:MM schedule time."""
+    hour_text, minute_text = value.split(":", maxsplit=1)
+    if len(hour_text) != 2 or len(minute_text) != 2:
+        raise ValueError("Invalid schedule time")
+    hour, minute = int(hour_text), int(minute_text)
+    if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+        raise ValueError("Invalid schedule time")
+    return hour * 60 + minute
 
 
 def _connection_name(connection: dict[str, Any]) -> str:
@@ -363,6 +491,9 @@ class TrainTrackConnectionSensor(CoordinatorEntity[TrainTrackCoordinator], Senso
         status = connection.get("status")
         if not isinstance(status, dict):
             status = {}
+        alternative_statuses, alternative_recommendations = _alternative_statuses(
+            connection, self.coordinator.data or []
+        )
         attributes = dict(connection)
         attributes.update(
             {
@@ -394,6 +525,9 @@ class TrainTrackConnectionSensor(CoordinatorEntity[TrainTrackCoordinator], Senso
                 "historical_context": connection.get("historicalContext"),
                 "history": connection.get("history", []),
                 "observations": connection.get("observations", []),
+                "alternatives": connection.get("alternatives", []),
+                "alternative_statuses": alternative_statuses,
+                "alternative_recommendations": alternative_recommendations,
             }
         )
         return attributes

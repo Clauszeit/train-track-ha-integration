@@ -4,6 +4,8 @@ Changes are recorded here. Every commit adds a concise entry to `Unreleased`.
 
 ## Unreleased
 
+- Expose linked alternative connections, both delay thresholds, and current switch/earlier-connection recommendations on connection sensor attributes.
+
 ## 0.5.5-dev.1 (Development)
 
 - Replace long route-based sensor IDs with stable purpose-first IDs and migrate repeated schedule fragments, including truncated and suffixed IDs.

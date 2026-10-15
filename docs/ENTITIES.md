@@ -1,6 +1,6 @@
 # Geräte und Entities
 
-Diese Referenz beschreibt vollständig, was die TrainTrack-Integration in Home Assistant anlegt und welche Daten sie über die dokumentierte TrainTrack-Verbindungen-API weitergibt. Maßgeblich sind die API-Antwort und der Stand der installierten Integration. Optionale Felder können fehlen, leer oder `null` sein. Die Integration berechnet aus den Fahrplandaten keine eigenen Verspätungen und verändert keine Verbindung in TrainTrack.
+Diese Referenz beschreibt vollständig, was die TrainTrack-Integration in Home Assistant anlegt und welche Daten sie über die dokumentierte TrainTrack-Verbindungen-API weitergibt. Maßgeblich sind die API-Antwort und der Stand der installierten Integration. Optionale Felder können fehlen, leer oder `null` sein. Die Integration berechnet keine Verspätung selbst: Sie verwendet ausschließlich `status.delayMinutes`, das TrainTrack aus einer gemeldeten geänderten Abfahrtszeit und der planmäßigen Abfahrt ableitet. Die Integration verändert keine Verbindung in TrainTrack.
 
 ## Gerätezuordnung und Lebenszyklus
 
@@ -50,7 +50,7 @@ Die Sensoren verwenden Home Assistants Entity-Namensschema (`has_entity_name`). 
 | `not_checked` | Die Quelle konnte wegen fehlender Stationskonfiguration nicht abgefragt werden. |
 | `configuration_error` | Die Quellenkonfiguration verhindert eine Abfrage. |
 
-Die Statuscodes sind Zeichenketten aus der API. Statusmeldungen und weitere Details stehen in den Attributen `status_message` und `monitor_status`. Der Sensor `Train` ist die von der API zugeordnete Zugbezeichnung, kein eigener Fahrplandatensatz. Der Sensor `Delay` spiegelt ausschließlich ein numerisches Feld `delayMinutes` wider. Die aktuelle Monitorimplementierung liefert bei zugeordneten Fahrten derzeit keine Verspätungsprognose; es wird insbesondere keine Verspätung aus `plannedDeparture`, Fahrplanzeiten oder Historie abgeleitet. Deshalb kann der Sensor `Delay` unbekannt sein, obwohl die Fahrt bereits zugeordnet wurde.
+Die Statuscodes sind Zeichenketten aus der API. Statusmeldungen und weitere Details stehen in den Attributen `status_message` und `monitor_status`. Der Sensor `Train` ist die von der API zugeordnete Zugbezeichnung, kein eigener Fahrplandatensatz. Der Sensor `Delay` spiegelt ausschließlich ein numerisches Feld `delayMinutes` wider. TrainTrack setzt dieses Feld, wenn DB für die zugeordnete Fahrt eine geänderte Abfahrtszeit meldet, und berechnet die Differenz zur planmäßigen Abfahrt der konkreten Fahrt. Der Wert kann negativ sein, wenn die gemeldete Abfahrt früher liegt. Ohne eine verwendbare gemeldete Abfahrtszeit bleibt der Sensor unbekannt, auch wenn der Monitor die Fahrt zugeordnet hat. Ein fehlender Wert bedeutet weder null Minuten Verspätung noch bestätigte Pünktlichkeit. Die Integration berechnet keine eigene Prognose aus `plannedDeparture`, Fahrplanzeiten oder Historie.
 
 ## Entity-Attribute
 
@@ -76,8 +76,11 @@ Die folgenden Attribute stehen auf jedem der drei Sensoren zur Verfügung. Die I
 | `historicalContext` | `historical_context` | Aggregierter historischer Kontext, sofern TrainTrack ihn für die Verbindung berechnet und zurückgibt. Die Struktur steht unten. |
 | `observations` | `observations` | Beobachtungen früher zugeordneter Abfahrten für dieselbe Strecke und Abfahrtszeit. Standardwert ist ein leeres Array. |
 | `history` | `history` | Änderungshistorie der Verbindung, sofern die API sie zurückgibt. Der Alias fällt auf ein leeres Array zurück. |
+| `alternatives` | `alternatives` | Verknüpfte Alternativverbindungen samt Grenzwerten `mainDelayThreshold` und `alternativeDelayThreshold`. Standardwert ist ein leeres Array. Die Beziehung wird auf der Hauptverbindung gespeichert. |
 
 Der Alias `route` enthält den vollständigen, nach demselben Namensschema wie das Gerät formatierten Routennamen. Er ist ein Anzeigename und kein zusätzliches API-Identifikationsfeld.
+
+`alternative_statuses` ergänzt jede Verknüpfung um die aktuelle Verbindung und ihren Monitorstatus. `alternative_recommendations` enthält nur aktuell zutreffende Hinweise. Die vollständige Struktur und Auswertung stehen im Abschnitt [Alternativverbindungen](#alternativverbindungen).
 
 ### Monitorstatus und Fahrtdetails
 
@@ -134,6 +137,42 @@ Zusätzliche beim Monitorereignis gespeicherte API-Felder werden ebenfalls unver
 ### Änderungshistorie
 
 `history` ist eine nach Beobachtungszeit absteigend sortierte Liste neu erkannter, relevanter Monitoränderungen für die Verbindung. Ein Eintrag enthält die Ereigniszeit `observedAt` und die gespeicherten Statusdaten, insbesondere `status`, `message` und – wenn die Fahrt zugeordnet wurde – Fahrtdetails wie `tripId`, `train`, `plannedDeparture`, `plannedPlatform`, `changeStation`, `changeDetails`, `urgency` und `precedingAffectedDepartures`. Ein Eintrag kann je nach Ereignis nur eine Teilmenge dieser Felder enthalten. TrainTrack speichert keine erneuten Historieneinträge für einen unveränderten Zustand. Wenn die API für die Verbindung keine Historie mitsendet, existiert das rohe Feld `history` nicht; der Alias `history` in Home Assistant ist dann eine leere Liste.
+
+## Alternativverbindungen
+
+Alternativverbindungen und beide Schwellenwerte werden in TrainTrack angelegt. Die HA-Integration kann diese Zuordnung nicht bearbeiten. Sie liest das API-Feld `alternatives` auf der Hauptverbindung ein und ergänzt auf allen drei Sensoren der Hauptverbindung die Attribute `alternatives`, `alternative_statuses` und `alternative_recommendations`. Eine Alternative verweist mit `connectionId` auf eine andere, separat überwachte Verbindung. Deren eigene Sensoren bleiben verfügbar; die verknüpfte Übersicht erlaubt zusätzlich Automationen anhand eines einzelnen Hauptverbindungs-Sensors.
+
+Jeder Eintrag in `alternatives` enthält:
+
+| Feld | Bedeutung |
+|---|---|
+| `connectionId` | ID der verknüpften Verbindung. |
+| `mainDelayThreshold` | X: Die Hauptverbindung muss **mehr als** diese Anzahl Verspätungsminuten haben, damit ein Wechselhinweis möglich ist. |
+| `alternativeDelayThreshold` | Y: Bei einer planmäßig früheren Alternative wird sie relevant, wenn sie **mehr als** diese Anzahl Verspätungsminuten hat. |
+
+Jeder Eintrag in `alternative_statuses` enthält `connection_id`, `origin`, `destination`, `departure_time`, `main_delay_threshold`, `alternative_delay_threshold`, `status_code`, `status_message`, `delay_minutes`, `operating_date`, `evaluation` und `alert_types`. `evaluation` ist `active`, wenn beide Verbindungen einen verwendbaren Monitorstatus und denselben Betriebstag haben und für die Alternative eine numerische Verspätung vorliegt; andernfalls ist sie `unknown`. Für X muss zusätzlich die Verspätung der Hauptverbindung bekannt sein. Der Y-Hinweis kann auch dann ausgewertet werden, wenn die Verspätung der Hauptverbindung unbekannt ist. `delay_minutes` stammt aus dem Status der Alternative und bleibt `null`, wenn TrainTrack keinen Wert ableiten konnte. `alert_types` ist eine Liste der aktuell zutreffenden Hinweisarten oder leer.
+
+`alternative_recommendations` enthält pro zutreffendem Hinweis einen Eintrag mit `type`, `connection_id`, `origin`, `destination`, `departure_time`, `main_delay_minutes`, `alternative_delay_minutes`, `main_delay_threshold` und `alternative_delay_threshold`. Die möglichen Typen sind:
+
+| `type` | Bedingung | Bedeutung |
+|---|---|---|
+| `switch_to_alternative` | Beide Monitorstatus sind `matched` oder `changed`, beide Betriebstage stimmen überein, die Alternative hat einen expliziten numerischen Wert von höchstens 0 Minuten, die Verspätung der Hauptverbindung ist numerisch und liegt strikt über X. | Die Hauptverbindung ist stärker verspätet als erlaubt und TrainTrack meldet die Alternative als pünktlich oder früher. |
+| `earlier_alternative_delayed` | Beide Monitorstatus sind `matched` oder `changed`, beide Betriebstage stimmen überein, die Alternative hat eine numerische Verspätung, ihre planmäßige Abfahrt ist früher als die der Hauptverbindung und ihre Verspätung liegt strikt über Y. Die Verspätung der Hauptverbindung muss dafür nicht bekannt sein. | Eine frühere Verbindung kann durch die gemeldete Verspätung erreichbar werden. |
+
+Beispiel: Die Hauptverbindung fährt planmäßig um 16:10. Die verknüpfte Alternative fährt um 16:03, X ist 5 und Y ist 3. Meldet TrainTrack für beide Fahrten denselben Betriebstag, 6 Minuten für die Hauptverbindung und 4 Minuten für die frühere Verbindung, erscheint `earlier_alternative_delayed`. Ist die Hauptverbindung stattdessen 6 Minuten verspätet und für die Alternative explizit 0 Minuten gemeldet, erscheint `switch_to_alternative`. Gleichheit mit einer Schwelle löst den jeweiligen Hinweis nicht aus.
+
+TrainTrack berechnet `delayMinutes` aus der gemeldeten geänderten Abfahrtszeit relativ zur planmäßigen Abfahrt der zugeordneten Fahrt. Der API-Wert ist keine Prognose. Gibt es keine gemeldete Abfahrtszeit, ist das Meldungsformat unbrauchbar, ist die Fahrt ausgefallen oder neu eingetragen oder fehlt ein sicherer Monitorstatus, bleibt die Verspätung unbekannt. Dann erzeugt Home Assistant keinen positiven Hinweis und nimmt keine Pünktlichkeit an. Ein Monitorstatus `matched` allein reicht für einen Wechselhinweis nicht.
+
+Die Integration fügt keine eigenen Entitäten für Alternativverbindungen hinzu. Automationen können auf Änderungen des bestehenden Status-Sensors reagieren und das Attribut `alternative_recommendations` auswerten. Beispiel für eine Template-Bedingung, die einen Wechselhinweis erkennt:
+
+```yaml
+condition: template
+value_template: >-
+  {{ state_attr('sensor.traintrack_status_<kennung>', 'alternative_recommendations')
+     | selectattr('type', 'equalto', 'switch_to_alternative') | list | length > 0 }}
+```
+
+Ersetze `<kennung>` durch den tatsächlichen Sensorbezeichner. Die Attribute werden bei jedem TrainTrack-Abruf aktualisiert. Das TrainTrack-Push-Verhalten ist unabhängig davon; die Integration sendet diese Hinweise nicht selbst als Home-Assistant-Benachrichtigung.
 
 ## Zeitbezug und Abrufverhalten
 

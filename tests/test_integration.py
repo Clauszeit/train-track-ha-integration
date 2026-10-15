@@ -709,6 +709,92 @@ class SetupAndSensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(added[1].native_value)
         self.assertIsNone(added[2].native_value)
 
+    def test_alternative_recommendations_cover_both_threshold_directions(self):
+        main = {
+            "id": "main",
+            "origin": "Arbeit",
+            "destination": "Bahnhof",
+            "departureTime": "16:10",
+            "alternatives": [{
+                "connectionId": "early",
+                "mainDelayThreshold": 5,
+                "alternativeDelayThreshold": 3,
+            }],
+            "status": {
+                "status": "changed",
+                "delayMinutes": 6,
+                "operatingDate": "2026-10-15",
+            },
+        }
+        early = {
+            "id": "early",
+            "origin": "Arbeit",
+            "destination": "Bahnhof",
+            "departureTime": "16:03",
+            "status": {
+                "status": "changed",
+                "delayMinutes": 4,
+                "operatingDate": "2026-10-15",
+            },
+        }
+
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+
+        self.assertEqual(summaries[0]["evaluation"], "active")
+        self.assertEqual(summaries[0]["alert_types"], ["earlier_alternative_delayed"])
+        self.assertEqual(recommendations[0]["type"], "earlier_alternative_delayed")
+        coordinator = _DataUpdateCoordinator(None)
+        coordinator.data = [main, early]
+        entity = sensor_module.TrainTrackConnectionSensor(
+            coordinator,
+            types.SimpleNamespace(unique_id="owner"),
+            main,
+            sensor_module.SENSORS[0],
+        )
+        self.assertEqual(
+            entity.extra_state_attributes["alternative_recommendations"],
+            recommendations,
+        )
+
+        main["status"].pop("delayMinutes")
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        self.assertEqual(summaries[0]["evaluation"], "active")
+        self.assertEqual(recommendations[0]["type"], "earlier_alternative_delayed")
+
+        main["status"]["delayMinutes"] = 6
+        early["status"]["delayMinutes"] = 0
+        _, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        self.assertEqual(recommendations[0]["type"], "switch_to_alternative")
+
+    def test_alternative_recommendations_require_explicit_same_day_delay_data(self):
+        main = {
+            "id": "main",
+            "departureTime": "16:10",
+            "alternatives": [{
+                "connectionId": "early",
+                "mainDelayThreshold": 5,
+                "alternativeDelayThreshold": 3,
+            }],
+            "status": {"status": "changed", "operatingDate": "2026-10-15"},
+        }
+        early = {
+            "id": "early",
+            "departureTime": "16:03",
+            "status": {"status": "matched", "operatingDate": "2026-10-15"},
+        }
+
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+
+        self.assertEqual(summaries[0]["evaluation"], "unknown")
+        self.assertEqual(summaries[0]["delay_minutes"], None)
+        self.assertEqual(recommendations, [])
+
+        early["status"]["delayMinutes"] = 4
+        early["status"]["operatingDate"] = "2026-10-16"
+        summaries, recommendations = sensor_module._alternative_statuses(main, [main, early])
+        self.assertEqual(summaries[0]["evaluation"], "unknown")
+        self.assertEqual(recommendations, [])
+
     def test_registered_device_name_refresh_preserves_user_name(self):
         device = types.SimpleNamespace(
             id="registered-device",
